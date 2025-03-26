@@ -1,6 +1,7 @@
 import sys
 from heapq import heappop,heappush,heapify
 
+debug = False
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -53,7 +54,7 @@ def shortestPath(begr,begc):
             if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': # or grid[nr][nc] == 'd':
                 continue
             #eprint(r,c,'exploring ', nr,nc)
-            if dist[nr][nc] is None or dist[nr][nc] >= (curdist+1):
+            if dist[nr][nc] is None or dist[nr][nc] > (curdist+1):
                 dist[nr][nc] = curdist+1
                 source[nr][nc] = []
                 heappush(hp,(curdist+1,nr,nc))
@@ -70,9 +71,12 @@ for i,(r,c,tp) in enumerate(depots):
     if 'd' == tp:
         spath[i] = shortestPath(r,c)
 
-def calcDir(distr,distc):
+def calcDir(nr,nc,r,c):
+    distr = nr-r
+    distc = nc-c
     for d in range(4):
         if distr == dr[d] and distc == dc[d]:
+            assertPath(d,nr,nc,r,c)
             return d
 
 # split the grid into small parts
@@ -133,7 +137,7 @@ def shortestPathAB(begr,begc,tgtr,tgtc,limit,explored):
             nc = c + dc[d]
             if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
                 continue
-            if (nr,nc) not in dist or dist[(nr,nc)] >= (curdist+1):
+            if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
                 dist[(nr,nc)] = curdist+1
                 source[(nr,nc)] = []
                 heappush(hp,(hamiltondist(tgtr,tgtc,nr,nc),curdist+1,nr,nc))
@@ -142,7 +146,13 @@ def shortestPathAB(begr,begc,tgtr,tgtc,limit,explored):
     
     return None
 
-
+def assertPath(d,nr,nc,r,c):
+    nr2 = r + dr[d]
+    nc2 = c + dc[d]
+    assert(nr == nr2)
+    assert(nc == nc2)
+    return d
+    
 
 def shortestPathSubGrid(begr,begc,limit,explored):
     hp = [(0,begr,begc)]
@@ -187,7 +197,7 @@ def shortestPathSubGrid(begr,begc,limit,explored):
             nc = c + dc[d]
             if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
                 continue
-            if (nr,nc) not in dist or dist[(nr,nc)] >= (curdist+1):
+            if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
                 dist[(nr,nc)] = curdist+1
                 source[(nr,nc)] = []
                 heappush(hp,(curdist+1,nr,nc))
@@ -195,6 +205,23 @@ def shortestPathSubGrid(begr,begc,limit,explored):
                 source[(nr,nc)].append((r,c))
     
     return None
+
+def followPath(r,c,path,explored,capacity):
+    (fr,fc),prev = path
+    if grid[fr][fc] != 's':
+        return None
+
+    if (r,c) not in prev:
+        return None
+    nr,nc = prev[(r,c)]
+    if (nr,nc) in explored:
+        return None # cannot follow path
+    if grid[nr][nc] == 's' and capacity >= C:
+        return None # cannot follow path
+    if grid[nr][nc] != 'd':
+        explored.remove((r,c))
+        explored.add((nr,nc))
+    return calcDir(nr,nc,r,c)
 
 def moveToNearestDepot(r,c,explored, capacity):
     dist = []
@@ -210,9 +237,10 @@ def moveToNearestDepot(r,c,explored, capacity):
     for lr,lc in source[r][c]:
         if (lr,lc) in explored or (capacity >= C and grid[lr][lc] == 's'):
             continue
-        explored.remove((r,c))
-        explored.add((lr,lc))
-        return calcDir(lr-r,lc-c)
+        if grid[lr][lc] != 'd':
+            explored.remove((r,c))
+            explored.add((lr,lc))
+        return calcDir(lr,lc,r,c)
     return None
 
 def moveAwayFromNearestDepot(r,c,explored, capacity):
@@ -230,9 +258,10 @@ def moveAwayFromNearestDepot(r,c,explored, capacity):
         if (nr,nc) in explored:
             continue
         if dist[nr][nc] > dist[r][c]:
-            explored.remove((r,c))
-            explored.add((nr,nc))
-            return calcDir(nr-r,nc-c)
+            if grid[nr][nc] != 'd':
+                explored.remove((r,c))
+                explored.add((nr,nc))
+            return calcDir(nr,nc,r,c)
     for d in range(4):
         nr = hr[h] + dr[d]
         nc = hc[h] + dc[d]
@@ -241,9 +270,10 @@ def moveAwayFromNearestDepot(r,c,explored, capacity):
         if (nr,nc) in explored:
             continue
         if dist[nr][nc] == dist[r][c]:
-            explored.remove((r,c))
-            explored.add((nr,nc))
-            return calcDir(nr-r,nc-c)
+            if grid[nr][nc] != 'd':
+                explored.remove((r,c))
+                explored.add((nr,nc))
+            return calcDir(nr,nc,r,c)
     return None
 
 planPath = [None]*H
@@ -290,24 +320,9 @@ for turn in range(0,1000):
             if planPath[h] is not None:
 
                 # get the plan
-                (fr,cc),prev = planPath[h]
-                if grid[fr][fc] != 's':
+                moves[h] = followPath(r,c,planPath[h],explored,load[h])
+                if moves[h] is None:
                     planPath[h] = None
-                    continue
-
-                if (r,c) not in prev:
-                    planPath[h] = None
-                    continue
-
-                rr,cc = prev[(r,c)]
-                if (rr,cc) in explored: # do not move
-                    continue
-                if (rr,cc) == (tgtr,tgtc):
-                    planPath[h] = None # reset path
-
-                explored.remove((r,c))
-                explored.add((rr,cc))
-                moves[h] = calcDir(rr-r,cc-c)
 
                 (subgrpr,subgrpc),unused = calcSubGrid(r,c)
                 busysubgroups.add((subgrpr,subgrpc))
@@ -323,7 +338,7 @@ for turn in range(0,1000):
         # find available collecters in this group
         if (subgrpr,subgrpc) in workersubgroups:
             for h in workersubgroups[(subgrpr,subgrpc)]:
-                if moves[h] is not None and planPath[h] is not None:
+                if moves[h] is not None or planPath[h] is not None:
                     continue
                 if load[h] < C: # we can use this worker
                     r,c = hr[h],hc[h]
@@ -331,8 +346,12 @@ for turn in range(0,1000):
                     planPath[h] = shortestPathAB(r,c,sr,sc,RN*RN,explored)
                     #tgtr,tgtc = shortestPathSubGrid(r,c,RN*RN,explored)
                     if planPath[h] is not None:
-                        busysubgroups.add((subgrpr,subgrpc))
-                        break
+                        moves[h] = followPath(r,c,planPath[h],explored,load[h])
+                        if moves[h] is None:
+                            planPath[h] = None
+                        else:
+                            busysubgroups.add((subgrpr,subgrpc))
+                            break
     
     for sid,(sr,sc,unused) in enumerate(slimes):
 
@@ -349,16 +368,19 @@ for turn in range(0,1000):
             
             if (subgrpr,subgrpc) in workersubgroups and (subgrpr,subgrpc) not in busysubgroups:
                 for h in workersubgroups[(subgrpr,subgrpc)]:
-                    if moves[h] is not None and planPath[h] is not None:
+                    if moves[h] is not None or planPath[h] is not None:
                         continue
                     if load[h] < C: # we can use this worker
                         r,c = hr[h],hc[h]
                         #eprint(r,c,'Worker can collect slime',sr,sc)
                         planPath[h] = shortestPathAB(r,c,sr,sc,N*N,explored)
                         if planPath[h] is not None:
-                            busysubgroups.add((subgrpr,subgrpc))
-                            processed = True
-                            break
+                            moves[h] = followPath(r,c,planPath[h],explored,load[h])
+                            if moves[h] is None:
+                                planPath[h] = None
+                            else:
+                                busysubgroups.add((subgrpr,subgrpc))
+                                break
             for newgrpr,newgrpc in [(subgrpr-1,subgrpc),(subgrpr-1,subgrpc-1),(subgrpr-1,subgrpc+1),(subgrpr+1,subgrpc),(subgrpr+1,subgrpc-1),(subgrpr+1,subgrpc+1),(subgrpr,subgrpc-1),(subgrpr,subgrpc+1)]:
                 if newgrpr < 0 or newgrpc < 0 or newgrpr > RN or newgrpc > RN:
                     continue
@@ -390,60 +412,61 @@ for turn in range(0,1000):
                         moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
                 else:
                     # find a slime in current subgrid
-                    if len(slimes):
-                        planPath[h] = shortestPathSubGrid(r,c,RN*RN,explored)
-                    tgtr,tgtc = None,None
+                    planPath[h] = shortestPathSubGrid(r,c,RN*RN,explored)
                     if planPath[h] is not None:
-                        (fr,fc),prev = planPath[h]
-                        tgtr,tgtc = prev[(r,c)]
-                        if (fr,fc) == (tgtr,tgtc):
-                            planPath[h] = None # reset path
-                        if (tgtr,tgtc) in explored: # do not move
-                            continue
-
-                    if tgtr is not None and (tgtr,tgtc) not in explored:
-                        busysubgroups.add((subgrpr,subgrpc))
-                        explored.remove((r,c))
-                        explored.add((tgtr,tgtc))
-                        moves[h] = calcDir(tgtr-r,tgtc-c)
+                        moves[h] = followPath(r,c,planPath[h],explored,load[h])
+                    if moves[h] is None:
+                        planPath[h] = None
                         #eprint('moving to ',tgtr,tgtc, explored)
-                    elif load[h]: # move the load to nearest depot
-                        moves[h] = moveToNearestDepot(r,c,explored,load[h])
-                        planPath[h] = None
-                    else: # move away from nearest depot
-                        moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
-                        planPath[h] = None
+                        if load[h]: # move the load to nearest depot
+                            moves[h] = moveToNearestDepot(r,c,explored,load[h])
+                        else: # move away from nearest depot
+                            moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
             else:
-                #eprint(planPath[h])
-                (fr,fc),prev = planPath[h]
-                if grid[fr][fc] != 's':
+                moves[h] = followPath(r,c,planPath[h],explored,load[h])
+                if moves[h] is None:
                     planPath[h] = None
-                    continue
-                tgtr,tgtc = prev[(r,c)]
-                if (tgtr,tgtc) in explored: # do not move
-                    continue
-                if (fr,fc) == (tgtr,tgtc):
-                    planPath[h] = None # reset path
-                explored.remove((r,c))
-                explored.add((tgtr,tgtc))
-                moves[h] = calcDir(tgtr-r,tgtc-c)
 
-
+    if debug:
+        eprint('============================================')
+    harvpos = set()
     cmd = ""
     # Move each harvester
     for h in range(H):
         if moves[h] is not None:
             d = moves[h]
             cmd += f"{h} {dname[d]} "
+
+            if debug:
+                # debug begins
+                curgrid = grid[hr[h]][:]
+                eprint(curgrid,hr[h],hc[h])
+                curgrid[hc[h]] = '!'
+                eprint(curgrid,hr[h],hc[h])
+                # debug ends
+
             nr = hr[h] + dr[d]
             nc = hc[h] + dc[d]
             if grid[nr][nc] != 'd':
                 hr[h] = nr
                 hc[h] = nc
             #explored.add((nr,nc))
-            assert(not( nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W'))
+            if debug:
+                # debug begins
+                curgrid = grid[hr[h]][:]
+                eprint(curgrid,'Ar',hr[h],hc[h])
+                curgrid[hc[h]] = '!'
+                eprint(curgrid,'Ar',hr[h],hc[h])
+                # debug ends
+
+            if debug:
+                assert((hr[h],hc[h]) not in harvpos)
+                harvpos.add((hr[h],hc[h]))
+                assert(not( nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W'))
         else:
             cmd += f"{h} X "
+            if debug:
+                harvpos.add((hr[h],hc[h]))
 
     # Output the command for the turn
     print(cmd)
