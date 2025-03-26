@@ -71,8 +71,7 @@ for i,(r,c,tp) in enumerate(depots):
     if 'd' == tp:
         spath[i] = shortestPath(r,c)
 
-if debug:
-    print(spath)
+#eprint(spath)
 
 def calcDir(nr,nc,r,c):
     distr = nr-r
@@ -227,16 +226,24 @@ def followPath(r,c,path,explored,capacity):
         explored.add((nr,nc))
     return calcDir(nr,nc,r,c)
 
-def moveToNearestDepot(r,c,explored, capacity):
+def moveToNearestDepot(r,c,explored, capacity, depotbusy):
     dist = []
     for i in range(len(depots)):
+        if depotbusy[i]:
+            continue
         if spath[i][0][r][c] is not None:
             dist.append( (spath[i][0][r][c], i) )
+    if not dist:
+        return None
+    #eprint(r,c,'move to neareest', dist, depotbusy)
     unused,nearest = min(dist)
 
     # now find the path to nearest depot
     source = spath[nearest][1]
     #eprint(source,r,c,source[r][c])
+    if not source[r][c]:
+        # FIXME probably we entered into the depot
+        return None
     
     lr,lc = source[r][c][0]
     for lr,lc in source[r][c]:
@@ -246,7 +253,9 @@ def moveToNearestDepot(r,c,explored, capacity):
         if grid[lr][lc] != 'd':
             #explored.remove((r,c))
             explored.add((lr,lc))
+        depotbusy[nearest] = True 
         return calcDir(lr,lc,r,c)
+    #return moveAwayFromNearestDepot(r,c,explored,capacity)
     return None
 
 def moveAwayFromNearestDepot(r,c,explored, capacity):
@@ -258,11 +267,11 @@ def moveAwayFromNearestDepot(r,c,explored, capacity):
 
     dist = spath[nearest][0]
     for d in range(4):
-        nr = hr[h] + dr[d]
-        nc = hc[h] + dc[d]
+        nr = r + dr[d]
+        nc = h + dc[d]
         if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
             continue
-        if (nr,nc) in explored:
+        if (nr,nc) in explored or (capacity >= C and grid[nr][nc] == 's'):
             continue
         if dist[nr][nc] > dist[r][c]:
             assert((r,c) in explored)
@@ -270,6 +279,20 @@ def moveAwayFromNearestDepot(r,c,explored, capacity):
                 #explored.remove((r,c))
                 explored.add((nr,nc))
             return calcDir(nr,nc,r,c)
+    for d in range(4):
+        nr = r + dr[d]
+        nc = h + dc[d]
+        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
+            continue
+        if (nr,nc) in explored or (capacity >= C and grid[nr][nc] == 's'):
+            continue
+        if dist[nr][nc] >= dist[r][c]: # get away even if there is wiggle room
+            assert((r,c) in explored)
+            if grid[nr][nc] != 'd':
+                #explored.remove((r,c))
+                explored.add((nr,nc))
+            return calcDir(nr,nc,r,c)
+
     return None
 
 planPath = [None]*H
@@ -278,6 +301,7 @@ planPath = [None]*H
 for turn in range(0,1000):
 
     explored = set()
+    depotbusy = [False]*len(depots)
     # find the slimes and nearest harvestors
     slimes = []
     slimeId = dict()
@@ -309,9 +333,15 @@ for turn in range(0,1000):
             continue
         r,c = hr[h],hc[h]
         if load[h]>=C:
-            # return to nearest depot ?
-            moves[h] = moveToNearestDepot(r,c,explored,load[h])
-            planPath[h] = None # reset plan
+            (subgrpr,subgrpc),unused = calcSubGrid(r,c)
+            if (subgrpr,subgrpc) in busysubgroups:
+                moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
+            else:
+                # return to nearest depot ?
+                moves[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
+                if moves[h] is not None:
+                    busysubgroups.add((subgrpr,subgrpc))
+                    planPath[h] = None # reset plan
         else:
             if planPath[h] is not None:
 
@@ -319,9 +349,10 @@ for turn in range(0,1000):
                 moves[h] = followPath(r,c,planPath[h],explored,load[h])
                 if moves[h] is None:
                     planPath[h] = None
-
-                (subgrpr,subgrpc),unused = calcSubGrid(r,c)
-                busysubgroups.add((subgrpr,subgrpc))
+                    moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h]) # Why ?
+                else:
+                    (subgrpr,subgrpc),unused = calcSubGrid(r,c)
+                    busysubgroups.add((subgrpr,subgrpc))
  
 
     '''
@@ -393,35 +424,48 @@ for turn in range(0,1000):
         r,c = hr[h],hc[h]
         if load[h]>=C:
             # return to nearest depot ?
-            
-            moves[h] = moveToNearestDepot(r,c,explored,load[h])
-            planPath[h] = None # reset plan
+            (subgrpr,subgrpc),unused = calcSubGrid(r,c)
+            if (subgrpr,subgrpc) in busysubgroups:
+                moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
+            else:
+                moves[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
+                busysubgroups.add((subgrpr,subgrpc))
+                planPath[h] = None # reset plan
         else:
 
             if not planPath[h]:
                 # get the subgrid
                 (subgrpr,subgrpc),unused = calcSubGrid(r,c)
                 if (subgrpr,subgrpc) in busysubgroups: # subgrid is busy
-                    if load[h]:
-                        moves[h] = moveToNearestDepot(r,c,explored,load[h])
-                    else:
-                        moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
+                    #if load[h]:
+                    #    moves[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
+                    #else:
+                    moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
                 else:
                     # find a slime in current subgrid
-                    planPath[h] = shortestPathSubGrid(r,c,RN*RN,explored)
+                    if slimes:
+                        planPath[h] = shortestPathSubGrid(r,c,RN*RN,explored)
                     if planPath[h] is not None:
                         moves[h] = followPath(r,c,planPath[h],explored,load[h])
                     if moves[h] is None:
                         planPath[h] = None
                         #eprint('moving to ',tgtr,tgtc, explored)
                         if load[h]: # move the load to nearest depot
-                            moves[h] = moveToNearestDepot(r,c,explored,load[h])
+                            moves[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
+                            if moves[h] is not None:
+                                busysubgroups.add((subgrpr,subgrpc))
                         else: # move away from nearest depot
                             moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
+                    else:
+                        busysubgroups.add((subgrpr,subgrpc))
             else:
                 moves[h] = followPath(r,c,planPath[h],explored,load[h])
                 if moves[h] is None:
                     planPath[h] = None
+                    moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
+                else:
+                    (subgrpr,subgrpc),unused = calcSubGrid(r,c)
+                    busysubgroups.add((subgrpr,subgrpc))
 
     if debug:
         eprint('============================================')
