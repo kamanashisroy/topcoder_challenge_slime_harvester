@@ -50,7 +50,7 @@ def shortestPath(begr,begc):
         for d in range(4):
             nr = r + dr[d]
             nc = c + dc[d]
-            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
+            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': # or grid[nr][nc] == 'd':
                 continue
             #eprint(r,c,'exploring ', nr,nc)
             if dist[nr][nc] is None or dist[nr][nc] >= (curdist+1):
@@ -83,10 +83,11 @@ RN = 1
 while (RN*RN) < N:
     RN += 1
 
-def calcSubGridId(r,c):
+def calcSubGrid(r,c):
     subr,r2 = divmod(r,RN)
     subc,c2 = divmod(c,RN)
     return (subr,subc),(r2,c2)
+
 
 def shortestPathSubGrid(begr,begc,limit,explored):
     hp = [(0,begr,begc)]
@@ -98,18 +99,18 @@ def shortestPathSubGrid(begr,begc,limit,explored):
         curdist, r, c = heappop(hp)
         if curdist > dist[(r,c)]:
             continue
-        if grid[r][c] == 's' and begr != r and begc != c:
+        if grid[r][c] == 's' and (begr,begc) != (r,c):
 
-            eprint(begr,begc,'found s',r,c)
+            #eprint(begr,begc,'found s',r,c)
             stack = [(0,r,c)]
             while stack:
                 #eprint(stack)
                 cost,rr,cc = stack.pop()
                 if dist[(rr,cc)] == 1:
                     if (rr,cc) in explored :
-                        eprint(rr,cc,'already explored')
+                        #eprint(rr,cc,'already explored')
                         continue
-                    eprint(begr,begc,'Should move to ',rr,cc,'to collect', r,c)
+                    #eprint(begr,begc,'Should move to ',rr,cc,'to collect', r,c,'dist',curdist)
                     return rr,cc
                 if rr == begr and cc == begc:
                     continue
@@ -117,15 +118,15 @@ def shortestPathSubGrid(begr,begc,limit,explored):
                     if (dist[(pr,pc)] + cost + 1) > curdist:
                         continue
                     stack.append( (cost+1,pr,pc))
-            eprint(begr,begc,'No steps to take!')
+            #eprint(begr,begc,'No steps to take!')
             #return None,None
-        #if curdist > limit:
-        #   return None,None
+        if curdist > limit:
+           return None,None
 
         for d in range(4):
             nr = r + dr[d]
             nc = c + dc[d]
-            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W'or grid[nr][nc] == 'd':
+            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
                 continue
             if (nr,nc) not in dist or dist[(nr,nc)] >= (curdist+1):
                 dist[(nr,nc)] = curdist+1
@@ -150,11 +151,42 @@ def moveToNearestDepot(r,c,explored, capacity):
     for lr,lc in source[r][c]:
         if (lr,lc) in explored or (capacity >= C and grid[lr][lc] == 's'):
             continue
+        explored.remove((r,c))
         explored.add((lr,lc))
         return calcDir(lr-r,lc-c)
     return None
 
-dir = [0] * H
+def moveAwayFromNearestDepot(r,c,explored, capacity):
+    dist = []
+    for i in range(len(depots)):
+        dist.append( (spath[i][0][r][c], i) )
+    unused,nearest = min(dist)
+
+    dist = spath[nearest][0]
+    for d in range(4):
+        nr = hr[h] + dr[d]
+        nc = hc[h] + dc[d]
+        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
+            continue
+        if (nr,nc) in explored:
+            continue
+        if dist[nr][nc] > dist[r][c]:
+            explored.remove((r,c))
+            explored.add((nr,nc))
+            return calcDir(nr-r,nc-c)
+    for d in range(4):
+        nr = hr[h] + dr[d]
+        nc = hc[h] + dc[d]
+        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
+            continue
+        if (nr,nc) in explored:
+            continue
+        if dist[nr][nc] == dist[r][c]:
+            explored.remove((r,c))
+            explored.add((nr,nc))
+            return calcDir(nr-r,nc-c)
+    return None
+
 
 # Simulate 1000 turns
 for turn in range(0,1000):
@@ -169,14 +201,16 @@ for turn in range(0,1000):
             slimeId[(r,c)] = len(slimes)
             slimes.append((r,c,grid[r][c]))
             # return to nearest depot ?
-        elif grid[r][c] == 'W' or grid[r][c] == 'd':
+        elif grid[r][c] == 'W':# or grid[r][c] == 'd':
             explored.add((r,c))
             
-    moves = [None]*H
     for h in range(H):
         r,c = hr[h],hc[h]
         explored.add((r,c))
 
+    subgrids = set()
+    moves = [None]*H
+    
     for h in range(H):
         r,c = hr[h],hc[h]
         if load[h]>=C:
@@ -185,41 +219,43 @@ for turn in range(0,1000):
             moves[h] = moveToNearestDepot(r,c,explored,load[h])
         else:
 
-            # find a slime in current subgrid
-            tgtr,tgtc = shortestPathSubGrid(r,c,N,explored)
-
-            if tgtr is not None and (tgtr,tgtc) not in explored:
-                explored.add((tgtr,tgtc))
-                moves[h] = calcDir(tgtr-r,tgtc-c)
-            else: 
-                moves[h] = moveToNearestDepot(r,c,explored,load[h])
+            # get the subgrid
+            (rr,cc),unused = calcSubGrid(r,c)
+            if (rr,cc) in subgrids: # subgrid is busy
+                if load[h]:
+                    moves[h] = moveToNearestDepot(r,c,explored,load[h])
+                else:
+                    moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
+            else:
+                # find a slime in current subgrid
+                tgtr,tgtc = None,None
+                if len(slimes):
+                    tgtr,tgtc = shortestPathSubGrid(r,c,RN*RN,explored)
+                subgrids.add((rr,cc))
+                if tgtr is not None and (tgtr,tgtc) not in explored:
+                    explored.remove((r,c))
+                    explored.add((tgtr,tgtc))
+                    moves[h] = calcDir(tgtr-r,tgtc-c)
+                elif load[h]: # move the load to nearest depot
+                    moves[h] = moveToNearestDepot(r,c,explored,load[h])
+                else: # move away from nearest depot
+                    moves[h] = moveAwayFromNearestDepot(r,c,explored,load[h])
 
     cmd = ""
     # Move each harvester
     for h in range(H):
         if moves[h] is not None:
             d = moves[h]
-            curgrid = grid[hr[h]][:]
-            eprint(h,'cur pos', hr[h],hc[h], curgrid);
-            curgrid[hc[h]] = '!'
-            eprint(h,'cur pos', hr[h],hc[h], curgrid);
             cmd += f"{h} {dname[d]} "
-            dir[h] = d
             nr = hr[h] + dr[d]
             nc = hc[h] + dc[d]
-            hr[h] = nr
-            hc[h] = nc
-            curgrid = grid[hr[h]][:]
-            eprint(d,'new pos', hr[h],hc[h], curgrid);
-            curgrid[hc[h]] = '!'
-            eprint(d,'new pos', hr[h],hc[h], curgrid);
-            explored.add((nr,nc))
+            if grid[nr][nc] != 'd':
+                hr[h] = nr
+                hc[h] = nc
+            #explored.add((nr,nc))
             assert(not( nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W'))
-            #grid[hr[h]][hc[h]] = 'H'
         else:
             cmd += f"{h} X "
-            eprint(d,'No move', hr[h],hc[h]);
-            #grid[hr[h]][hc[h]] = 'H'
 
     # Output the command for the turn
     print(cmd)
@@ -237,8 +273,4 @@ for turn in range(0,1000):
     for r in range(N):
         for c in range(N):
             grid[r][c] = input()
-    eprint("------------------------------------------")
-    #eprint(grid)
-    for h in range(H):
-        assert('H' == grid[hr[h]][hc[h]] )
 
