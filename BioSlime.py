@@ -1,7 +1,7 @@
 import sys
 from heapq import heappop,heappush,heapify
 
-debug = True
+debug = False
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -51,7 +51,7 @@ def shortestPath(begr,begc):
         for d in range(4):
             nr = r + dr[d]
             nc = c + dc[d]
-            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': # or grid[nr][nc] == 'd':
+            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
                 continue
             #eprint(r,c,'exploring ', nr,nc)
             if dist[nr][nc] is None or dist[nr][nc] > (curdist+1):
@@ -70,6 +70,9 @@ spath = dict()
 for i,(r,c,tp) in enumerate(depots):
     if 'd' == tp:
         spath[i] = shortestPath(r,c)
+
+if debug:
+    print(spath)
 
 def calcDir(nr,nc,r,c):
     distr = nr-r
@@ -135,7 +138,7 @@ def shortestPathAB(begr,begc,tgtr,tgtc,limit,explored):
         for d in range(4):
             nr = r + dr[d]
             nc = c + dc[d]
-            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
+            if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
                 continue
             if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
                 dist[(nr,nc)] = curdist+1
@@ -218,15 +221,17 @@ def followPath(r,c,path,explored,capacity):
         return None # cannot follow path
     if grid[nr][nc] == 's' and capacity >= C:
         return None # cannot follow path
+    assert((r,c) in explored)
     if grid[nr][nc] != 'd':
-        explored.remove((r,c))
+        #explored.remove((r,c))
         explored.add((nr,nc))
     return calcDir(nr,nc,r,c)
 
 def moveToNearestDepot(r,c,explored, capacity):
     dist = []
     for i in range(len(depots)):
-        dist.append( (spath[i][0][r][c], i) )
+        if spath[i][0][r][c] is not None:
+            dist.append( (spath[i][0][r][c], i) )
     unused,nearest = min(dist)
 
     # now find the path to nearest depot
@@ -237,8 +242,9 @@ def moveToNearestDepot(r,c,explored, capacity):
     for lr,lc in source[r][c]:
         if (lr,lc) in explored or (capacity >= C and grid[lr][lc] == 's'):
             continue
+        assert((r,c) in explored)
         if grid[lr][lc] != 'd':
-            explored.remove((r,c))
+            #explored.remove((r,c))
             explored.add((lr,lc))
         return calcDir(lr,lc,r,c)
     return None
@@ -246,32 +252,22 @@ def moveToNearestDepot(r,c,explored, capacity):
 def moveAwayFromNearestDepot(r,c,explored, capacity):
     dist = []
     for i in range(len(depots)):
-        dist.append( (spath[i][0][r][c], i) )
+        if spath[i][0][r][c] is not None:
+            dist.append( (spath[i][0][r][c], i) )
     unused,nearest = min(dist)
 
     dist = spath[nearest][0]
     for d in range(4):
         nr = hr[h] + dr[d]
         nc = hc[h] + dc[d]
-        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
+        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
             continue
         if (nr,nc) in explored:
             continue
         if dist[nr][nc] > dist[r][c]:
+            assert((r,c) in explored)
             if grid[nr][nc] != 'd':
-                explored.remove((r,c))
-                explored.add((nr,nc))
-            return calcDir(nr,nc,r,c)
-    for d in range(4):
-        nr = hr[h] + dr[d]
-        nc = hc[h] + dc[d]
-        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W': #or grid[nr][nc] == 'd':
-            continue
-        if (nr,nc) in explored:
-            continue
-        if dist[nr][nc] == dist[r][c]:
-            if grid[nr][nc] != 'd':
-                explored.remove((r,c))
+                #explored.remove((r,c))
                 explored.add((nr,nc))
             return calcDir(nr,nc,r,c)
     return None
@@ -445,9 +441,12 @@ for turn in range(0,1000):
 
             nr = hr[h] + dr[d]
             nc = hc[h] + dc[d]
-            if grid[nr][nc] != 'd':
+            if grid[nr][nc] == 'd':
+                planPath[h] = None
+            else:
                 hr[h] = nr
                 hc[h] = nc
+            
             #explored.add((nr,nc))
             if debug:
                 # debug begins
@@ -464,7 +463,11 @@ for turn in range(0,1000):
         else:
             cmd += f"{h} X "
             if debug:
+                assert((hr[h],hc[h]) not in harvpos)
                 harvpos.add((hr[h],hc[h]))
+
+    if debug:
+        sys.stderr.flush()
 
     # Output the command for the turn
     print(cmd)
