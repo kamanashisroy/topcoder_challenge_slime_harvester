@@ -197,7 +197,7 @@ class BioSlime:
 
 
 
-    def shortestPathSubGrid(self,begr,begc,limit,explored):
+    def shortestPathToSlime(self,begr,begc,limit,explored):
         hp = [(0,begr,begc)]
         dist = dict()
         source = dict()
@@ -299,26 +299,6 @@ class BioSlime:
         
         return None
 
-    def nextCell(self,r,c,explored,myload,dist):
-        if (r,c) not in dist:
-            if debug:
-                eprint(r,c,'nextCell not found', dist)
-        curdist = dist[(r,c)]
-        for nr,nc in self.iterMovesGivenExplored(r,c,explored,myload):
-            if (nr,nc) not in dist:
-                continue
-            if dist[(nr,nc)] < curdist:
-                return nr,nc
-        for nr,nc in self.iterMovesGivenExplored(r,c,explored,myload):
-            if (nr,nc) not in dist:
-                continue
-            if dist[(nr,nc)] <= curdist: # notice smaller equal
-                return nr,nc
-                
-        if debug:
-            eprint(r,c,'nextCell check mate')
-        return None
-
     def collectSlime(self,h,explored,myload,unusedDepotBusy):
         r,c = self.har[h]
         if myload >= self.C:
@@ -326,7 +306,7 @@ class BioSlime:
             return None # cannot collect slime
 
         if self.planPath[h] is None:
-            self.planPath[h] = self.shortestPathSubGrid(r,c,self.RN*self.RN,explored)
+            self.planPath[h] = self.shortestPathToSlime(r,c,self.RN*self.RN,explored)
 
         if self.planPath[h] is None:
             return None
@@ -585,6 +565,7 @@ class BioSlime:
             elif self.grid[r][c] == 'W':# or grid[r][c] == 'd':
                 explored.add((r,c))
                 
+        #self.slimeSubGrids = self.buildSlimeSubGrids(slimes)
 
         depotbusy = self.depotbad[:]
 
@@ -592,6 +573,12 @@ class BioSlime:
             explored.add((r,c))
 
         moveCmds = [None]*self.H
+
+        totalLoad = sum(self.load)
+        if not slimes and 0 == totalLoad:
+            self.sendMoves(moveCmds)
+            return
+            
 
         for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
@@ -639,7 +626,6 @@ class BioSlime:
                     eprint('Harvester ',h,r,c, 'Moving away', moveCmds[h])
  
 
-        #slimeSubGrids = self.buildSlimeSubGrids(slimes)
      
         self.sendMoves(moveCmds)
 
