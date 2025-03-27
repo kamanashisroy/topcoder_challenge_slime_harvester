@@ -7,8 +7,6 @@ debug = False
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-#eprint("TensorFlow version:", tf.__version__)
-
 # Read in N (grid size), C (max load capacity), and H (number of harvesters)
 N = int(input())
 C = int(input())

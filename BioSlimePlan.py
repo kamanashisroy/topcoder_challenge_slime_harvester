@@ -1,3 +1,5 @@
+
+import time
 import sys
 from heapq import heappop,heappush,heapify
 
@@ -5,638 +7,721 @@ debug = False
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-# Read in N (grid size), C (max load capacity), and H (number of harvesters)
-N = int(input())
-C = int(input())
-H = int(input())
 
-# Read the location of each harvester
-har, load = [], []
-for h in range(H):
-  row, col = input().split(" ")
-  har.append( [int(row),int(col)] )
-  load.append(0)
+class BioSlime:
+    def __init__(self,tester):
+        self.tester = tester
+        self.N = tester.N
+        self.C = tester.C
+        self.H = tester.H
+        self.grid = [[' ' for x in range(self.N)] for y in range(self.N)]
 
-grid = [[' ' for x in range(N)] for y in range(N)]
-# Read the starting grid configuration
-for r in range(N):
-  for c in range(N):
-    grid[r][c] = input()
+        # Define movement directions (right, down, left, up)
+        self.dc = [1,0,-1,0]
+        self.dr = [0,1,0,-1]
+        self.harstr = [str(x) for x in range(self.H)]
 
-depots = []
-depotId = dict()
-for r in range(N):
-  for c in range(N):
-    if grid[r][c] == 'd':
-        depotId[(r,c)] = len(depots)
-        depots.append((r,c,grid[r][c]))
+        self.RN = 1
+        while (self.RN*self.RN) < self.N:
+            self.RN += 1
 
-# Define movement directions (right, down, left, up)
-dc = [1,0,-1,0]
-dr = [0,1,0,-1]
-dname = ['R','D','L','U']
+        self.planPath = [None]*self.H
 
-def iterMoves(r,c):
-    for d in range(4):
-        nr = r + dr[d]
-        nc = c + dc[d]
-        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
-            continue
-        yield (nr,nc)
-    
-def iterMovesGivenExplored(r,c,explored,capacity):
-    for d in range(4):
-        nr = r + dr[d]
-        nc = c + dc[d]
-        if nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W' or grid[nr][nc] == 'd':
-            continue
-        if (nr,nc) in explored or (capacity >= C and grid[nr][nc] == 's'):
-            continue
-        yield (nr,nc)
+
+    def setup(self):
+        # Read the location of each harvester
+        self.load = [0]*self.H
+        self.har = self.tester.setupHarvester()
+
+        self.tester.parseGrid(self.grid)
+
+        self.depots = []
+        self.depotId = dict()
+        for r in range(self.N):
+          for c in range(self.N):
+            if self.grid[r][c] == 'd':
+                self.depotId[(r,c)] = len(self.depots)
+                self.depots.append((r,c))
+        self.D = len(self.depots)
+        self.depotbad = [False]*self.D
+
+        # This path will be useful to return to depot
+        self.buildShortestPathFromDepot()
+        self.buildGarrages()
+
+    def buildShortestPathFromDepot(self):
+        self.shortestPathFromDepot = [None]*self.D
+        for i,(r,c) in enumerate(self.depots):
+            if not self.depotbad[i]:
+                self.shortestPathFromDepot[i] = self.shortestPath(r,c)
+
+
+    def buildGarrages(self):
+        self.garrages = [None]*self.H
+        numGarrages = 0
+        #harvgrids = self.buildHarvestorSubGrids()
+        self.shortestPathFromGarrages = [None]*self.H
+        # Make a resting point for all the harvesters
+        for r in range(self.N):
+            for c in range(self.N):
+                if numGarrages == self.H:
+                    return
+                if c<0 or c>=self.N or r<0 or r>=self.N or self.grid[r][c]=='W' or self.grid[r][c] == 'd':
+                    continue
+                for g in self.garrages:
+                    if g is not None and self.manhatdist(g[0],g[1],r,c) < 10:
+                        break
+                else:
+
+                    gidx = None
+                    for h in range(self.H):
+                        if self.garrages[h] is not None:
+                            continue
+                        if gidx is None:
+                            gidx = h
+                        else:
+                            hr,hc = self.har[h]
+                            gr,gc = self.har[gidx]
+                            if self.manhatdist(hr,hc,r,c) < self.manhatdist(gr,gc,r,c):
+                                gidx = h
+
+                    if gidx is not None:
+                        self.garrages[gidx] = (r,c)
+                        self.shortestPathFromGarrages[gidx] = self.shortestPath(r,c)
+                        numGarrages += 1
+                    
+
+    def assertPath(self,d,nr,nc,r,c):
+        nr2 = r + self.dr[d]
+        nc2 = c + self.dc[d]
+        assert(nr == nr2)
+        assert(nc == nc2)
+        return d
  
-# At first find the shortest path 
-def shortestPath(begr,begc):
-    hp = [(0,begr,begc)]
-    dist = [[None]*N for _ in range(N)]
-    source = [[None]*N for _ in range(N)]
-    dist[begr][begc] = 0
+    def calcDir(self,nr,nc,r,c):
+        distr = nr-r
+        distc = nc-c
+        for d in range(4):
+            if distr == self.dr[d] and distc == self.dc[d]:
+                self.assertPath(d,nr,nc,r,c)
+                return d
 
-    while hp:
-        curdist, r, c = heappop(hp)
-        if curdist > dist[r][c]:
-            continue
-        for nr,nc in iterMoves(r,c):
-            #eprint(r,c,'exploring ', nr,nc)
-            if dist[nr][nc] is None or dist[nr][nc] > (curdist+1):
-                dist[nr][nc] = curdist+1
-                source[nr][nc] = []
-                heappush(hp,(curdist+1,nr,nc))
-            if dist[nr][nc] >= (curdist+1):
-                source[nr][nc].append((r,c))
-    
-    #eprint(r,c,'Done',dist)
-    return [dist,source]        
+    def iterMoves(self,r,c):
+        for d in range(4):
+            nr = r + self.dr[d]
+            nc = c + self.dc[d]
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W' or self.grid[nr][nc] == 'd':
+                continue
+            yield (nr,nc)
+        
+    def iterMovesGivenExplored(self,r,c,explored,myload):
+        for d in range(4):
+            nr = r + self.dr[d]
+            nc = c + self.dc[d]
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W' or self.grid[nr][nc] == 'd':
+                continue
+            if (nr,nc) in explored or (myload >= self.C and self.grid[nr][nc] == 's'):
+                continue
+            yield (nr,nc)
+     
+    # At first find the shortest path 
+    def shortestPath(self,begr,begc):
+        hp = [(0,begr,begc)]
+        #dist = [[None]*self.N for _ in range(self.N)]
+        dist = dict()
+        #source = [[None]*self.N for _ in range(self.N)]
+        source = dict()
+        #dist[begr][begc] = 0
+        dist[(begr,begc)] = 0
+
+        while hp:
+            curdist, r, c = heappop(hp)
+            #if curdist > dist[r][c]:
+            if curdist > dist[(r,c)]:
+                continue
+            for nr,nc in self.iterMoves(r,c):
+                #eprint(r,c,'exploring ', nr,nc)
+                if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
+                    dist[(nr,nc)] = curdist+1
+                    #source[nr][nc] = []
+                    source[(nr,nc)] = []
+                    heappush(hp,(curdist+1,nr,nc))
+                if dist[(nr,nc)] >= (curdist+1):
+                    #source[nr][nc].append((r,c))
+                    source[(nr,nc)].append((r,c))
+        
+        #eprint(r,c,'Done',dist)
+        return [dist,source]        
+
+    def buildPathToSlime(self,begr,begc,r,c,dist,source,explored):
+        curdist = dist[(r,c)]
+        prev = dict()
+        #eprint(begr,begc,'found s',r,c)
+        stack = [(0,r,c)]
+        while stack:
+            #eprint(stack)
+            cost,rr,cc = stack.pop()
+            if dist[(rr,cc)] == 1:
+                if (rr,cc) in explored :
+                    #eprint(rr,cc,'already explored')
+                    continue
+                #eprint(begr,begc,'Should move to ',rr,cc,'to collect', r,c,'dist',curdist)
+                #self.grid[r][c] = '.' # do not allow others find it
+                prev[(begr,begc)] = (rr,cc)
+                return [(r,c),prev,'s']
+            if rr == begr and cc == begc:
+                continue
+            for pr,pc in source[(rr,cc)]:
+                if (dist[(pr,pc)] + cost + 1) > curdist:
+                    continue
+                stack.append( (cost+1,pr,pc))
+                prev[(pr,pc)] = (rr,cc)
+        return None
+
+    def buildPathToDepot(self,depr,depc,r,c,dist,source,explored):
+        prev = dict()
+
+        rr,cc = r,c
+        while (depr,depc) != (rr,cc):
+            if (rr,cc) in source:
+                for pr,pc in source[(rr,cc)]:
+                    if self.grid[pr][pc] != 's' and (pr,pc) not in explored:
+                        prev[(rr,cc)] = (pr,pc)
+                        rr,cc = pr,pc
+                        break
+                else:
+                    return None
+            else:
+                return None
+        return [(depr,depc),prev,'d']
 
 
-# This path will be useful to return to depot
-shortestPathFromDepot = dict()
-for i,(r,c,tp) in enumerate(depots):
-    if 'd' == tp:
-        shortestPathFromDepot[i] = shortestPath(r,c)
 
-#eprint(shortestPathFromDepot)
+    def shortestPathSubGrid(self,begr,begc,limit,explored):
+        hp = [(0,begr,begc)]
+        dist = dict()
+        source = dict()
+        dist[(begr,begc)] = 0
 
-def calcDir(nr,nc,r,c):
-    distr = nr-r
-    distc = nc-c
-    for d in range(4):
-        if distr == dr[d] and distc == dc[d]:
-            assertPath(d,nr,nc,r,c)
-            return d
+        while hp:
+            curdist, r, c = heappop(hp)
+            if curdist > dist[(r,c)]:
+                continue
+            if self.grid[r][c] == 's' and (begr,begc) != (r,c):
 
-# split the grid into small parts
-# total cells = N*N
-# we can make subgrid of size root(N)*root(N)
+                p = self.buildPathToSlime(begr,begc,r,c,dist,source,explored)
+                if p is not None:
+                    return p
+                #eprint(begr,begc,'No steps to take!')
+                #return None,None
+            if curdist > limit:
+               return None
 
-RN = 1
-while (RN*RN) < N:
-    RN += 1
+            for nr,nc in self.iterMoves(r,c):
+                if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
+                    dist[(nr,nc)] = curdist+1
+                    source[(nr,nc)] = []
+                    heappush(hp,(curdist+1,nr,nc))
+                if dist[(nr,nc)] >= (curdist+1):
+                    source[(nr,nc)].append((r,c))
+        
+        return None
+
+
+    def calcSubGrid(self,r,c):
+        subr,r2 = divmod(r,self.RN)
+        subc,c2 = divmod(c,self.RN)
+        return (subr,subc),(r2,c2)
+
+    def manhatdist(self,r1,c1,r2,c2):
+        return abs(r2-r1)+abs(c2-c1)
+
+    def buildHarvestorSubGrids(self):
+        subgrids = dict()
+        for h,(r,c) in enumerate(self.har):
+            subgrp,unused = self.calcSubGrid(r,c)
+            if subgrp not in subgrids:
+                subgrids[subgrp] = [h]
+            else:
+                subgrids[subgrp].append(h)
+        return subgrids
+
+    def buildSlimeSubGrids(self, slimes):
+        subgrids = dict()
+        for i,(r,c) in enumerate(slimes):
+            subgrp,unused = self.calcSubGrid(r,c)
+            if subgrp not in subgrids:
+                subgrids[subgrp] = [i]
+            else:
+                subgrids[subgrp].append(i)
+        return subgrids
+
+
+    def isNeighborBusy(self, h, moves, limit=3):
+        begr,begc = self.har[h]
+
+        for h2 in range(self.H):
+            if h!=h2 and moves[h2] is not None:
+                r,c = self.har[h2]
+                if self.manhatdist(begr,begc,r,c) <= limit:
+                    return True
+        return False
 
        
 
-def calcSubGrid(r,c):
-    subr,r2 = divmod(r,RN)
-    subc,c2 = divmod(c,RN)
-    return (subr,subc),(r2,c2)
+    def shortestPathAB(self,begr,begc,tgtr,tgtc,limit,explored):
+        hp = [(manhatdist(self,tgtr,tgtc,begr,begc),0,begr,begc)]
+        dist = dict()
+        source = dict()
+        dist[(begr,begc)] = 0
 
-def mahattandist(r1,c1,r2,c2):
-    return abs(r2-r1)+abs(c2-c1)
+        while hp:
+            ham,curdist, r, c = heappop(hp)
+            if curdist > dist[(r,c)]:
+                continue
+            if self.grid[r][c] == 's' and (begr,begc) != (r,c):
 
-def buildHarvestorSubGrids():
-    subgrids = dict()
-    for h,(r,c) in enumerate(har):
-        subgrp,unused = calcSubGrid(r,c)
-        if subgrp not in subgrids:
-            subgrids[subgrp] = [h]
-        else:
-            subgrids[subgrp].append(h)
-    return subgrids
+                p = self.buildPathToSlime(begr,begc,r,c,dist,source,explored)
+                if p is not None:
+                    return p
+                #eprint(begr,begc,'No steps to take!')
+                #return None,None
+            if curdist > limit:
+               return None
 
-def buildSlimeSubGrids(slimes):
-    subgrids = dict()
-    for i,(r,c) in enumerate(slimes):
-        subgrp,unused = calcSubGrid(r,c)
-        if subgrp not in subgrids:
-            subgrids[subgrp] = [i]
-        else:
-            subgrids[subgrp].append(i)
-    return subgrids
-
-
-
-garrages = [None]*H
-harvgrids = buildHarvestorSubGrids()
-# Make a resting point for all the harvesters
-for r in range(N):
-    for c in range(N):
-        if c<0 or c>=N or r<0 or r>=N or grid[r][c]=='W' or grid[r][c] == 'd':
-            continue
-        for g in garrages:
-            if g is not None and mahattandist(g[0],g[1],r,c) < 10:
-                break
-        else:
-            subgrp,unused = calcSubGrid(r,c)
-            if subgrp in harvgrids:
-                for h in harvgrids[subgrp]:
-                    if garrages[h] is None:
-                        garrages[h] = (r,c)
-                        break
+            for nr,nc in self.iterMoves(r,c):
+                if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
+                    dist[(nr,nc)] = curdist+1
+                    source[(nr,nc)] = []
+                    heappush(hp,(self.manhatdist(tgtr,tgtc,nr,nc),curdist+1,nr,nc))
+                if dist[(nr,nc)] >= (curdist+1):
+                    source[(nr,nc)].append((r,c))
         
-# This path will be useful to return to depot
-shortestPathFromGarrages = [None]*H
-for i,g in enumerate(garrages):
-    if g is not None:
-        shortestPathFromGarrages[i] = shortestPath(g[0],g[1])
-        
-
-def shortestPathAB(begr,begc,tgtr,tgtc,limit,explored):
-    hp = [(mahattandist(tgtr,tgtc,begr,begc),0,begr,begc)]
-    dist = dict()
-    source = dict()
-    dist[(begr,begc)] = 0
-
-    while hp:
-        ham,curdist, r, c = heappop(hp)
-        if curdist > dist[(r,c)]:
-            continue
-        if grid[r][c] == 's' and (begr,begc) != (r,c):
-
-            prev = dict()
-            #eprint(begr,begc,'found s',r,c)
-            stack = [(0,r,c)]
-            while stack:
-                #eprint(stack)
-                cost,rr,cc = stack.pop()
-                if dist[(rr,cc)] == 1:
-                    if (rr,cc) in explored :
-                        #eprint(rr,cc,'already explored')
-                        continue
-                    #eprint(begr,begc,'Should move to ',rr,cc,'to collect', r,c,'dist',curdist)
-                    prev[(begr,begc)] = (rr,cc)
-                    return (r,c),prev
-                if rr == begr and cc == begc:
-                    continue
-                for pr,pc in source[(rr,cc)]:
-                    if (dist[(pr,pc)] + cost + 1) > curdist:
-                        continue
-                    stack.append( (cost+1,pr,pc))
-                    prev[(pr,pc)] = (rr,cc)
-            #eprint(begr,begc,'No steps to take!')
-            #return None,None
-        if curdist > limit:
-           return None
-
-        for nr,nc in iterMoves(r,c):
-            if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
-                dist[(nr,nc)] = curdist+1
-                source[(nr,nc)] = []
-                heappush(hp,(mahattandist(tgtr,tgtc,nr,nc),curdist+1,nr,nc))
-            if dist[(nr,nc)] >= (curdist+1):
-                source[(nr,nc)].append((r,c))
-    
-    return None
-
-def assertPath(d,nr,nc,r,c):
-    nr2 = r + dr[d]
-    nc2 = c + dc[d]
-    assert(nr == nr2)
-    assert(nc == nc2)
-    return d
-    
-
-def shortestPathSubGrid(begr,begc,limit,explored):
-    hp = [(0,begr,begc)]
-    dist = dict()
-    source = dict()
-    dist[(begr,begc)] = 0
-
-    while hp:
-        curdist, r, c = heappop(hp)
-        if curdist > dist[(r,c)]:
-            continue
-        if grid[r][c] == 's' and (begr,begc) != (r,c):
-
-            prev = dict()
-            #eprint(begr,begc,'found s',r,c)
-            stack = [(0,r,c)]
-            while stack:
-                #eprint(stack)
-                cost,rr,cc = stack.pop()
-                if dist[(rr,cc)] == 1:
-                    if (rr,cc) in explored :
-                        #eprint(rr,cc,'already explored')
-                        continue
-                    #eprint(begr,begc,'Should move to ',rr,cc,'to collect', r,c,'dist',curdist)
-                    #grid[r][c] = '.' # do not allow others find it
-                    prev[(begr,begc)] = (rr,cc)
-                    return [(r,c),prev]
-                if rr == begr and cc == begc:
-                    continue
-                for pr,pc in source[(rr,cc)]:
-                    if (dist[(pr,pc)] + cost + 1) > curdist:
-                        continue
-                    stack.append( (cost+1,pr,pc))
-                    prev[(pr,pc)] = (rr,cc)
-            #eprint(begr,begc,'No steps to take!')
-            #return None,None
-        if curdist > limit:
-           return None
-
-        for nr,nc in iterMoves(r,c):
-            if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
-                dist[(nr,nc)] = curdist+1
-                source[(nr,nc)] = []
-                heappush(hp,(curdist+1,nr,nc))
-            if dist[(nr,nc)] >= (curdist+1):
-                source[(nr,nc)].append((r,c))
-    
-    return None
-
-def followPath(r,c,path,explored,capacity):
-    (fr,fc),prev = path
-    if grid[fr][fc] != 's':
         return None
 
-    if (r,c) not in prev:
+    def nextCell(self,r,c,explored,myload,dist):
+        if (r,c) not in dist:
+            if debug:
+                eprint(r,c,'nextCell not found', dist)
+        curdist = dist[(r,c)]
+        for nr,nc in self.iterMovesGivenExplored(r,c,explored,myload):
+            if (nr,nc) not in dist:
+                continue
+            if dist[(nr,nc)] < curdist:
+                return nr,nc
+        for nr,nc in self.iterMovesGivenExplored(r,c,explored,myload):
+            if (nr,nc) not in dist:
+                continue
+            if dist[(nr,nc)] <= curdist: # notice smaller equal
+                return nr,nc
+                
+        if debug:
+            eprint(r,c,'nextCell check mate')
         return None
-    nr,nc = prev[(r,c)]
-    if (nr,nc) in explored:
-        return None # cannot follow path
-    if grid[nr][nc] == 's' and capacity >= C:
-        return None # cannot follow path
-    assert((r,c) in explored)
-    if grid[nr][nc] != 'd':
-        #explored.remove((r,c))
-        explored.add((nr,nc))
-    return calcDir(nr,nc,r,c)
 
-def moveToNearestDepot(r,c,explored, capacity, depotbusy):
-    dist = []
-    for i in range(len(depots)):
-        if depotbusy[i]:
-            continue
-        if shortestPathFromDepot[i][0][r][c] is not None:
-            dist.append( (shortestPathFromDepot[i][0][r][c], i) )
-    if not dist:
-        return None
-    #eprint(r,c,'move to neareest', dist, depotbusy)
-    unused,nearest = min(dist)
+    def collectSlime(self,h,explored,myload,unusedDepotBusy):
+        r,c = self.har[h]
+        if myload >= self.C:
+            self.planPath[h] = None
+            return None # cannot collect slime
 
-    # now find the path to nearest depot
-    source = shortestPathFromDepot[nearest][1]
-    #eprint(source,r,c,source[r][c])
-    if not source[r][c]:
-        # FIXME probably we entered into the depot
-        #return None
-        return moveAwayFromNearestDepot(r,c,explored,capacity,depotbusy)
-    
-    lr,lc = source[r][c][0]
-    for lr,lc in source[r][c]:
-        if (lr,lc) in explored or (capacity >= C and grid[lr][lc] == 's'):
-            continue
+        if self.planPath[h] is None:
+            self.planPath[h] = self.shortestPathSubGrid(r,c,self.RN*self.RN,explored)
+
+        if self.planPath[h] is None:
+            return None
+
+        (fr,fc),prev,plantype = self.planPath[h]
+        if self.grid[fr][fc] != 's': # Slime is gone
+            if debug:
+                eprint(h,r,c,'path is lost', self.grid[fr][fc])
+            self.planPath[h] = None
+            return None
+
+        if (r,c) not in prev:
+            if debug:
+                eprint(h,r,c,'path is broke during collecting slime', plantype)
+            self.planPath[h] = None
+            return None
+        nr,nc = prev[(r,c)]
+        if (nr,nc) in explored:
+            # wait for other planPath[h] = None
+            return None # FIXME should we scatter here ?
+        if self.grid[nr][nc] == 's' and myload >= self.C:
+            self.planPath[h] = None
+            return None # We are full
         assert((r,c) in explored)
-        if grid[lr][lc] != 'd':
+        assert(self.grid[nr][nc] != 'd')
+        if self.grid[nr][nc] != 'd':
             #explored.remove((r,c))
-            explored.add((lr,lc))
-        depotbusy[nearest] = True 
-        return calcDir(lr,lc,r,c)
-    #return moveAwayFromNearestDepot(r,c,explored,capacity)
-    return None
-
-def moveAwayFromNearestDepot(r,c,explored, capacity, depotbusy):
-    dist = []
-    for i in range(len(depots)):
-        #if depotbusy[i]:
-        #    continue
-        if shortestPathFromDepot[i][0][r][c] is not None:
-            dist.append( (shortestPathFromDepot[i][0][r][c], i) )
-    unused,nearest = min(dist)
-
-    dist = shortestPathFromDepot[nearest][0]
-    if dist[r][c] is None: # we entered into a depot
-        for nr,nc in iterMovesGivenExplored(r,c, explored, capacity):
             explored.add((nr,nc))
-            return calcDir(nr,nc,r,c)
-        return None
+        return self.calcDir(nr,nc,r,c)
+
+    def moveToNearestDepot(self,h,explored, myload, depotbusy):
+        r,c = self.har[h]
+
+        if self.planPath[h] is not None:
+            (fr,fc),prev,actiontp = self.planPath[h]
+            if self.grid[fr][fc] != 'd': # dipot is gone
+                self.planPath[h] = None
+
+        if self.planPath[h] is None:
+
+            dist = []
+            for i in range(self.D):
+                if depotbusy[i]:
+                    continue
+                if self.shortestPathFromDepot[i] is None:
+                    continue
+                if (r,c) in self.shortestPathFromDepot[i][0]:
+                    dist.append( (self.shortestPathFromDepot[i][0][(r,c)], i) )
+                else:
+                    if debug:
+                        eprint(h,r,c,'harvestor does not have shortest path', self.shortestPathFromDepot[i][0])
+            if debug:
+                eprint(h,r,c,'move to neareest', dist, depotbusy)
+            if not dist:
+                return None
+            unused,nearest = min(dist)
+            if debug:
+                eprint(h,r,c,'found nearest', nearest)
+            fr,fc = self.depots[nearest]
+            disttable,sourcetable = self.shortestPathFromDepot[nearest]
+            
+            self.planPath[h] = self.buildPathToDepot(fr,fc,r,c,disttable,sourcetable,explored)
+
+        if debug:
+            eprint(h,r,c,'plan', self.planPath[h])
+        if self.planPath[h] is None:
+            return None
+
+        (fr,fc),prev,plantp = self.planPath[h]
         
-    for nr,nc in iterMovesGivenExplored(r,c, explored, capacity):
-        if dist[nr][nc] is None: # do not enter into a depot
-            continue
-        if dist[nr][nc] > dist[r][c]:
-            assert((r,c) in explored)
-            if grid[nr][nc] != 'd':
-                #explored.remove((r,c))
-                explored.add((nr,nc))
-            return calcDir(nr,nc,r,c)
-    for nr,nc in iterMovesGivenExplored(r,c, explored, capacity):
-        if dist[nr][nc] is None: # do not enter into a depot
-            continue
-        if dist[nr][nc] >= dist[r][c]: # get away even if there is wiggle room
-            assert((r,c) in explored)
-            if grid[nr][nc] != 'd':
-                #explored.remove((r,c))
-                explored.add((nr,nc))
-            return calcDir(nr,nc,r,c)
+        if debug:
+            eprint(h,r,c,'plan fc,fr', fr,fc)
+        if self.grid[fr][fc] != 'd': # dipot is gone
+            if debug:
+                eprint(h,r,c,'path is lost', self.grid[fr][fc])
+            self.planPath[h] = None
+            return None
 
-    return None
-
-
-def moveToNearestGarrage(r,c,explored, capacity):
-    for i,(rr,cc) in enumerate(har):
-        if (rr,cc) == (r,c):
-            nearest = i
-            break
-    else:
-        return None
-    if shortestPathFromGarrages[nearest] is None:
-        return None
-    '''
-    dist = []
-    for i in range(H):
-        if shortestPathFromGarrages[i] is not None and shortestPathFromGarrages[i][0][r][c] is not None:
-            dist.append( (shortestPathFromGarrages[i][0][r][c], i) )
-    if not dist:
-        return None
-    #eprint(r,c,'move to neareest', dist, depotbusy)
-    unused,nearest = min(dist)
-    '''
-
-    # now find the path to nearest depot
-    source = shortestPathFromGarrages[nearest][1]
-    #eprint(source,r,c,source[r][c])
-    if not source[r][c]:
-        # FIXME probably we entered into the garrage
-        return None
-    
-    lr,lc = source[r][c][0]
-    for lr,lc in source[r][c]:
-        if (lr,lc) in explored or (capacity >= C and grid[lr][lc] == 's'):
-            continue
+        if (r,c) not in prev:
+            if debug:
+                eprint(h,r,c,'path is broke while moving to nearest depot', plantp)
+            self.planPath[h] = None
+            return None
+        nr,nc = prev[(r,c)]
+        if (nr,nc) in explored:
+            # wait for other planPath[h] = None
+            if debug:
+                eprint(h,r,c,'move is occupied', nr,nc)
+            return None # FIXME should we scatter here ?
+        if self.grid[nr][nc] == 's' and myload >= self.C:
+            self.planPath[h] = None
+            if debug:
+                eprint(h,r,c,'Cannot collect slime', nr.nc)
+            return None # We are full
         assert((r,c) in explored)
-        if grid[lr][lc] != 'd':
+        if self.grid[nr][nc] != 'd':
             #explored.remove((r,c))
-            explored.add((lr,lc))
-        return calcDir(lr,lc,r,c)
-    return None
+            explored.add((nr,nc))
+        if debug:
+            eprint(h,r,c,'path found next move', self.calcDir(nr,nc,r,c))
+        return self.calcDir(nr,nc,r,c)
 
+    def moveAwayFromNearestDepot(self,h,explored, capacity, depotbusy):
+        r,c = self.har[h]
+        dist = []
+        for i in range(self.D):
+            if depotbusy[i]:
+                continue
+            if (r,c) in self.shortestPathFromDepot[i][0]:
+                dist.append( (self.shortestPathFromDepot[i][0][(r,c)], i) )
+        if not dist:
+            return None
+        unused,nearest = min(dist)
 
-planPath = [None]*H
-collide = [False]*H
-depotbad = [False]*len(depots)
-
-# Simulate 1000 turns
-for turn in range(0,1000):
-
-    explored = set()
-
-    # find the slimes and nearest harvestors
-    slimes = []
-    slimeId = dict()
-    for r in range(N):
-      for c in range(N):
-        if grid[r][c] == 's':
-            slimeId[(r,c)] = len(slimes)
-            slimes.append((r,c))
-            # return to nearest depot ?
-        elif grid[r][c] == 'W':# or grid[r][c] == 'd':
-            explored.add((r,c))
+        dist = self.shortestPathFromDepot[nearest][0]
+        if (r,c) not in dist: # we entered into a depot
+            for nr,nc in self.iterMovesGivenExplored(r,c, explored, capacity):
+                explored.add((nr,nc))
+                return self.calcDir(nr,nc,r,c)
+            return None
             
+        for nr,nc in self.iterMovesGivenExplored(r,c, explored, capacity):
+            if (nr,nc) not in dist: # do not enter into a depot
+                continue
+            if dist[(nr,nc)] > dist[(r,c)]:
+                assert((r,c) in explored)
+                if self.grid[nr][nc] != 'd':
+                    #explored.remove((r,c))
+                    explored.add((nr,nc))
+                return self.calcDir(nr,nc,r,c)
 
-    busysubgroups = set()
-    moveCmds = [None]*H
+        for nr,nc in self.iterMovesGivenExplored(r,c, explored, capacity):
+            if (nr,nc) not in dist: # do not enter into a depot
+                continue
+            if dist[(nr,nc)] >= dist[(r,c)]: # notice >= here
+                assert((r,c) in explored)
+                if self.grid[nr][nc] != 'd':
+                    #explored.remove((r,c))
+                    explored.add((nr,nc))
+                return self.calcDir(nr,nc,r,c)
 
-    for h,(r,c) in enumerate(har):
-        if collide[h] is not None and grid[r][c] != 'H':
-            cr,cc = collide[h]
-            moveCmds[h] = calcDir(r,c,cr,cc)
-            for i,(dr,dc) in enumerate(depots):
-                if (dr,dc) == (cr,cc):
-                    depotbad[i] = True
-                    break
-            har[h] = [cr,cc]
-            collide[h] = None
-    depotbusy = depotbad[:]
 
-    for h,(r,c) in enumerate(har):
-        explored.add((r,c))
+        return None
 
-    for h,(r,c) in enumerate(har):
-        if moveCmds[h] is not None:
-            continue
-        subgrp,unused = calcSubGrid(r,c)
-        if load[h]>=C:
-            planPath[h] = None # reset plan
-            moveCmds[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
+
+    def moveToNearestGarrage(self,h,explored, myload, depotbusy):
+        r,c = self.har[h]
+        nearest,nearestg = None,None
+        for i,g in enumerate(self.garrages):
+            if g is not None:
+                if nearest is None or self.manhatdist(nearestg[0],nearestg[1],r,c) >  self.manhatdist(g[0],g[1],r,c):
+                    nearest = i
+                    nearestg = g
+        if nearest is None or self.shortestPathFromGarrages[nearest] is None:
+            return None
+
+        # now find the path to nearest depot
+        source = self.shortestPathFromGarrages[nearest][1]
+        #eprint(source,r,c,source[r][c])
+        if (r,c) not in source: # path broke
+            return None
+        
+        lr,lc = source[(r,c)][0]
+        for lr,lc in source[(r,c)]:
+            if (lr,lc) in explored or (myload >= self.C and self.grid[lr][lc] == 's'):
+                continue
+            assert((r,c) in explored)
+            if self.grid[lr][lc] != 'd':
+                #explored.remove((r,c))
+                explored.add((lr,lc))
+            return self.calcDir(lr,lc,r,c)
+        return None
+
+    def sendMoves(self, moveCmds):
+        if debug:
+            eprint('============================================')
+        harvpos = set()
+        cmd = []
+        dname = ['R','D','L','U']
+        # Move each harvester
+        for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
-                busysubgroups.add(subgrp)
-            else:
-                #moveCmds[h] = moveToNearestGarrage(r,c,explored, load[h])
-                pass
-        else:
-            if planPath[h] is not None:
+                d = moveCmds[h]
+                cmd.append(self.harstr[h])
+                cmd.append(dname[d])
 
-                # get the plan
-                moveCmds[h] = followPath(r,c,planPath[h],explored,load[h])
-                if moveCmds[h] is None:
-                    planPath[h] = None
-                    if load[h]: # move the load to nearest depot
-                        moveCmds[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
-                        if moveCmds[h] is not None:
-                            busysubgroups.add(subgrp)
-                    else: # move away from nearest depot
-                        #moveCmds[h] = moveAwayFromNearestDepot(r,c,explored,load[h],depotbusy)
-                        moveCmds[h] = moveToNearestGarrage(r,c,explored, load[h])
+                if debug:
+                    # debug begins
+                    curgrid = self.grid[r][:]
+                    eprint(curgrid,r,c)
+                    curgrid[c] = '!'
+                    eprint(curgrid,r,c)
+                    # debug ends
+
+                nr = r + self.dr[d]
+                nc = c + self.dc[d]
+                if self.grid[nr][nc] == 'd':
+                    self.planPath[h] = None
                 else:
-                    busysubgroups.add(subgrp)
- 
+                    self.har[h] = [nr,nc]
+                
+                rr,cc = self.har[h]
+                #explored.add((nr,nc))
+                if debug:
+                    # debug begins
+                    curgrid = self.grid[rr][:]
+                    eprint(curgrid,'A',rr,cc)
+                    curgrid[cc] = '!'
+                    eprint(curgrid,'A',rr,cc)
+                    # debug ends
 
-    slimeSubGrids = buildSlimeSubGrids(slimes)
-    '''
-    workersubgroups = buildHarvestorSubGrids()
-    for sid,(sr,sc,unused) in enumerate(slimes):
+                if debug:
+                    assert((rr,cc) not in harvpos)
+                    harvpos.add((rr,cc))
+                    assert(not( nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W'))
+            else:
+                cmd.append(self.harstr[h])
+                cmd.append('X')
+                rr,cc = self.har[h]
+                if debug:
+                    #assert((rr,cc) not in harvpos)
+                    harvpos.add((rr,cc))
 
-        (subgrpr,subgrpc),(exr,exc) = calcSubGrid(sr,sc)
+        self.tester.pushCmd(cmd)
 
-        if (subgrpr,subgrpc) in busysubgroups:
-            continue
-        # find available collecters in this group
-        if (subgrpr,subgrpc) in workersubgroups:
-            for h in workersubgroups[(subgrpr,subgrpc)]:
-                if moveCmds[h] is not None or planPath[h] is not None:
-                    continue
-                if load[h] < C: # we can use this worker
-                    r,c = hr[h],hc[h]
-                    #eprint(r,c,'Worker can collect slime',sr,sc)
-                    planPath[h] = shortestPathAB(r,c,sr,sc,RN*RN,explored)
-                    #tgtr,tgtc = shortestPathSubGrid(r,c,RN*RN,explored)
-                    if planPath[h] is not None:
-                        moveCmds[h] = followPath(r,c,planPath[h],explored,load[h])
-                        if moveCmds[h] is None:
-                            planPath[h] = None
-                        else:
-                            busysubgroups.add((subgrpr,subgrpc))
-                            break
-    
-    for sid,(sr,sc,unused) in enumerate(slimes):
+        self.load = self.tester.parseLoad()
 
-        (curgrpr,curgrpc),(exr,exc) = calcSubGrid(sr,sc)
-        if (curgrpr,curgrpc) in busysubgroups:
-            continue
-        exploredgrp = set()
-        stack = [(curgrpr,curgrpc)]
-        exploredgrp.add((curgrpr,curgrpc))
+        # Read the updated grid
+        self.tester.parseGrid(self.grid)
 
-        processed = False
-        while stack and not processed:
-            subgrpr,subgrpc = stack.pop()
-            
-            if (subgrpr,subgrpc) in workersubgroups and (subgrpr,subgrpc) not in busysubgroups:
-                for h in workersubgroups[(subgrpr,subgrpc)]:
-                    if moveCmds[h] is not None or planPath[h] is not None:
-                        continue
-                    if load[h] < C: # we can use this worker
-                        r,c = hr[h],hc[h]
-                        #eprint(r,c,'Worker can collect slime',sr,sc)
-                        planPath[h] = shortestPathAB(r,c,sr,sc,N*N,explored)
-                        if planPath[h] is not None:
-                            moveCmds[h] = followPath(r,c,planPath[h],explored,load[h])
-                            if moveCmds[h] is None:
-                                planPath[h] = None
-                            else:
-                                busysubgroups.add((subgrpr,subgrpc))
-                                break
-            for newgrpr,newgrpc in [(subgrpr-1,subgrpc),(subgrpr-1,subgrpc-1),(subgrpr-1,subgrpc+1),(subgrpr+1,subgrpc),(subgrpr+1,subgrpc-1),(subgrpr+1,subgrpc+1),(subgrpr,subgrpc-1),(subgrpr,subgrpc+1)]:
-                if newgrpr < 0 or newgrpc < 0 or newgrpr > RN or newgrpc > RN:
-                    continue
-                if (newgrpr,newgrpc) in exploredgrp:
-                    continue
-                stack.append((newgrpr,newgrpc))
-                exploredgrp.add((newgrpr,newgrpc))
-    '''
+        # fix bad depots and harvestor position
+        changed = False
+        for i,(dr,dc) in enumerate(self.depots):
+            if self.grid[dr][dc] != 'd':
+                if not self.depotbad[i]:
+                    self.depotbad[i] = True
+                    changed = True
+
+        if changed:
+            self.buildShortestPathFromDepot()
 
  
-    for h,(r,c) in enumerate(har):
-        if moveCmds[h] is not None:
-            continue
-        subgrp,unused = calcSubGrid(r,c)
-        if load[h]>=C:
-            planPath[h] = None # reset plan
-            # return to nearest depot ?
-            if subgrp in busysubgroups:
-                moveCmds[h] = moveAwayFromNearestDepot(r,c,explored,load[h],depotbusy)
+    def run(self,turn):
+
+        explored = set()
+
+        # find the slimes and nearest harvestors
+        slimes = []
+        slimeId = dict()
+        for r in range(self.N):
+          for c in range(self.N):
+            if self.grid[r][c] == 's':
+                slimeId[(r,c)] = len(slimes)
+                slimes.append((r,c))
+                # return to nearest depot ?
+            elif self.grid[r][c] == 'W':# or grid[r][c] == 'd':
+                explored.add((r,c))
+                
+
+        depotbusy = self.depotbad[:]
+
+        for h,(r,c) in enumerate(self.har):
+            explored.add((r,c))
+
+        moveCmds = [None]*self.H
+
+        for h,(r,c) in enumerate(self.har):
+            if moveCmds[h] is not None:
+                continue
+            if self.isNeighborBusy(h, moveCmds):
+                continue
+            if self.planPath[h] is not None:
+                if self.planPath[h][2] == 'd':
+                    moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
+                    if debug:
+                        eprint('Harvester ',h,r,c, 'moving to nearestet depot', moveCmds[h])
+                elif self.planPath[h][2] == 's':
+                    moveCmds[h] = self.collectSlime(h,explored,self.load[h],depotbusy)
+                    if debug:
+                        eprint('Harvester ',h,r,c, 'Collecting slime', moveCmds[h])
+                 
+
+        for h,(r,c) in enumerate(self.har):
+            if moveCmds[h] is not None:
+                continue
+            if self.isNeighborBusy(h, moveCmds):
+                continue
+            if self.load[h]>=self.C:
+                moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
+                if debug:
+                    eprint('Harvester ',h,r,c, 'moving to nearestet depot via new path', moveCmds[h])
+
+            elif slimes:
+                moveCmds[h] = self.collectSlime(h,explored,self.load[h],None)
+                if debug:
+                    eprint('Harvester ',h,r,c, 'Collecting slime in new path', moveCmds[h])
+                 
+        for h,(r,c) in enumerate(self.har):
+            if moveCmds[h] is not None:
+                continue
+            if self.load[h]:
+                if self.isNeighborBusy(h, moveCmds):
+                    continue
+                moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
+                if debug:
+                    eprint('Harvester ',h,r,c, 'Moving to nearest depot', moveCmds[h])
             else:
-                moveCmds[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
-                busysubgroups.add(subgrp)
-        else:
+                moveCmds[h] = self.moveAwayFromNearestDepot(h,explored,self.load[h],depotbusy)
+                if debug:
+                    eprint('Harvester ',h,r,c, 'Moving away', moveCmds[h])
+ 
 
-            if not planPath[h]:
-                # get the subgrid
-                if subgrp in busysubgroups: # subgrid is busy
-                    #if load[h]:
-                    #    moveCmds[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
-                    #else:
-                    #moveCmds[h] = moveAwayFromNearestDepot(r,c,explored,load[h],depotbusy)
-                    moveCmds[h] = moveToNearestGarrage(r,c,explored,load[h])
-                else:
-                    # find a slime in current subgrid
-                    if subgrp in slimeSubGrids and slimeSubGrids[subgrp]:
-                        planPath[h] = shortestPathSubGrid(r,c,RN*RN,explored)
-                    if planPath[h] is None and slimes and (turn%20 == 0):
-                        planPath[h] = shortestPathSubGrid(r,c,RN*RN,explored)
-                    if planPath[h] is not None:
-                        moveCmds[h] = followPath(r,c,planPath[h],explored,load[h])
-                    if moveCmds[h] is None:
-                        planPath[h] = None
-                        #eprint('moving to ',tgtr,tgtc, explored)
-                        if load[h]: # move the load to nearest depot
-                            moveCmds[h] = moveToNearestDepot(r,c,explored,load[h],depotbusy)
-                            if moveCmds[h] is not None:
-                                busysubgroups.add(subgrp)
-                        else: # move away from nearest depot
-                            moveCmds[h] = moveAwayFromNearestDepot(r,c,explored,load[h],depotbusy)
-                    else:
-                        busysubgroups.add(subgrp)
-            else:
-                moveCmds[h] = followPath(r,c,planPath[h],explored,load[h])
-                if moveCmds[h] is None:
-                    planPath[h] = None
-                    moveCmds[h] = moveAwayFromNearestDepot(r,c,explored,load[h],depotbusy)
-                else:
-                    busysubgroups.add(subgrp)
+        #slimeSubGrids = self.buildSlimeSubGrids(slimes)
+     
+        self.sendMoves(moveCmds)
 
-    if debug:
-        eprint('============================================')
-    harvpos = set()
-    cmd = ""
-    # Move each harvester
-    for h,(r,c) in enumerate(har):
-        if moveCmds[h] is not None:
-            d = moveCmds[h]
-            cmd += f"{h} {dname[d]} "
+class AutoTester:
 
-            if debug:
-                # debug begins
-                curgrid = grid[r][:]
-                eprint(curgrid,r,c)
-                curgrid[c] = '!'
-                eprint(curgrid,r,c)
-                # debug ends
+    def __init__(self,N,C,H):
+        self.N = N
+        self.C = C
+        self.H = H
 
-            nr = r + dr[d]
-            nc = c + dc[d]
-            if grid[nr][nc] == 'd':
-                planPath[h] = None
-                collide[h]  = (nr,nc)
-            else:
-                har[h] = [nr,nc]
-            
-            rr,cc = har[h]
-            #explored.add((nr,nc))
-            if debug:
-                # debug begins
-                curgrid = grid[rr][:]
-                eprint(curgrid,'A',rr,cc)
-                curgrid[cc] = '!'
-                eprint(curgrid,'A',rr,c)
-                # debug ends
+    def setupHarvester(self):
+        har = [(0,0)]*self.H
+        return har
+        
+    def parseGrid(self,grid):
+        pass
 
-            if debug:
-                assert((rr,cc) not in harvpos)
-                harvpos.add((rr,cc))
-                assert(not( nc<0 or nc>=N or nr<0 or nr>=N or grid[nr][nc]=='W'))
-        else:
-            cmd += f"{h} X "
-            if debug:
-                #assert((rr,cc) not in harvpos)
-                harvpos.add((rr,cc))
+    def parseLoad(self):
+        return [0]*H
 
-    if debug:
-        sys.stderr.flush()
+    def pushCmd(self,cmd):
+        pass
 
-    # Output the command for the turn
-    print(cmd)
-    sys.stdout.flush()
+class StdTester:
+    def __init__(self):
+        # Read in N (grid size), C (max load capacity), and H (number of harvesters)
+        self.N = int(input())
+        self.C = int(input())
+        self.H = int(input())
+        if debug:
+            eprint('N,C,H',self.N,self.C,self.H);
 
-    # Read the elapsed time
-    tm = int(input())
-    load = []
+    def setupHarvester(self):
+        har = [(0,0)]*self.H
+        for h in range(self.H):
+          row, col = input().split(" ")
+          har[h] = [int(row),int(col)]
 
-    # Read the number of fuel carried by each harvester
-    for h in range(H):
-        load.append(int(input()))
-
-    # Read the updated grid
-    for r in range(N):
-        for c in range(N):
+        return har
+ 
+    def parseGrid(self,grid):
+        # Read the starting grid configuration
+        for r in range(self.N):
+          for c in range(self.N):
             grid[r][c] = input()
+
+    def parseLoad(self):
+        # Read the elapsed time
+        tm = int(input())
+        load = [0]*self.H
+        # Read the number of fuel carried by each harvester
+        for h in range(self.H):
+            load[h] = int(input())
+        return load
+
+    def pushCmd(self,cmd):
+        assert(len(cmd) == self.H*2)
+        cmdstr = ' '.join(cmd)+" \n"
+        if debug:
+            sys.stderr.write(cmdstr)
+        #time.sleep(1/10)
+        # Output the command for the turn
+        #print(cmdstr,flush=False)
+        #print(cmdstr)
+        #print(cmdstr,flush=True,end='')
+        #print(cmdstr,end='')
+        sys.stdout.write(cmdstr)
+        sys.stdout.flush()
+        #print()
+        #sys.stdout.flush()
+
+
+if __name__ == "__main__":
+
+    #tester = AutoTester() # or StdTester
+    tester = StdTester()
+    bsalg = BioSlime(tester)
+    bsalg.setup()
+
+    # Simulate 1000 turns
+    for turn in range(100):
+        bsalg.run(turn)
+
+
 
