@@ -32,6 +32,53 @@ class BioSlime:
         self.slimes = []
         self.slimeId = dict()
         self.depotAffinity = [None]*self.H
+        self.dumpingToDepot = [False]*self.H
+
+        # calibration logic
+        self.prevScore = 0
+        self.prevNumSlimes = 0
+        self.applcableCapacity = min(2,self.C)
+
+    def calculateScore(self):
+        
+        totalScore = self.N*self.N
+        totalScore -= len(self.slimes)
+        for d in range(self.D):
+            if self.depotbad[d]:
+                continue
+            totalScore += self.depotscore[d]
+        return totalScore
+
+    def calculateApplicableCapacity(self):
+        if self.turn >= 900: # At the end use highest capacity
+            self.applcableCapacity = self.C
+            return
+
+        if (self.turn % 40) != 0:
+            return
+
+        if 0 == self.turn:
+            self.prevScore = self.calculateScore()
+            self.prevNumSlimes = len(self.slimes)
+            return
+
+        curScore = self.calculateScore()
+        curNumSlimes = len(self.slimes)
+
+        if curNumSlimes < self.prevNumSlimes:
+            if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes>>1):
+                self.applcableCapacity = self.applcableCapacity>>1
+                #if self.applcableCapacity < 2:
+                #    self.applcableCapacity = 2
+        else:
+            self.applcableCapacity = min(self.C,(self.applcableCapacity<<1))
+
+
+        self.prevScore = curScore
+        self.prevNumSlimes = len(self.slimes)
+
+        eprint(self.turn, 'Applicable capacity', self.applcableCapacity)
+        
 
     def setup(self):
         # Read the location of each harvester
@@ -49,6 +96,7 @@ class BioSlime:
                 self.depots.append((r,c))
         self.D = len(self.depots)
         self.depotbad = [False]*self.D
+        self.depotscore = [0]*self.D
 
         # This path will be useful to return to depot
         self.buildShortestPathFromDepot()
@@ -650,6 +698,7 @@ class BioSlime:
                 
         #self.slimeSubGrids = self.buildSlimeSubGrids(slimes)
 
+        self.calculateApplicableCapacity()
         depotbusy = self.depotbad[:]
 
         for h,(r,c) in enumerate(self.har):
@@ -684,7 +733,7 @@ class BioSlime:
                 continue
             if self.isNeighborBusy(h, moveCmds):
                 continue
-            if self.load[h]>=self.C:
+            if self.load[h]>=self.applcableCapacity:
                 moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
                 if debugStrategy:
                     eprint('Harvester ',h,r,c, 'moving to nearestet depot via new path', moveCmds[h])
