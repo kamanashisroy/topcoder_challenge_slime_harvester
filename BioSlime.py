@@ -31,6 +31,7 @@ class BioSlime:
         self.wanderMoves = [None]*self.H
         self.slimes = []
         self.slimeId = dict()
+        self.depotAffinity = [None]*self.H
 
     def setup(self):
         # Read the location of each harvester
@@ -54,9 +55,35 @@ class BioSlime:
 
     def buildShortestPathFromDepot(self):
         self.shortestPathFromDepot = [None]*self.D
+
+        numDepots = 0
         for i,(r,c) in enumerate(self.depots):
             if not self.depotbad[i]:
                 self.shortestPathFromDepot[i] = self.shortestPath(r,c)
+                numDepots += 1
+
+        self.depotAffinity = [None]*self.H
+        if numDepots <= 0:
+            return
+        harPerDepot = (self.H//numDepots)+1
+        for i,(r,c) in enumerate(self.depots):
+            if not self.depotbad[i]:
+                dist = self.shortestPathFromDepot[i][0]
+                hp = []
+                for h in range(self.H):
+                    if self.depotAffinity[h] is not None:
+                        continue
+                    hr,hc = self.har[h]
+                    if (hr,hc) in dist:
+                        hp.append((dist[(hr,hc)],h))
+                heapify(hp)
+                numHar = 0
+                while hp and numHar < harPerDepot:
+                    unused, h = heappop(hp)
+                    self.depotAffinity[h] = i
+                    numHar += 1
+
+                
 
 
     def assertPath(self,d,nr,nc,r,c):
@@ -188,7 +215,8 @@ class BioSlime:
                 return None
         return [(depr,depc),prev,'d']
 
-    def shortestPathToDepotAny(self,begr,begc,limit,explored,myload):
+    def shortestPathToDepotAny(self,h,limit,explored,myload):
+        begr,begc = self.har[h]
         hp = [(0,begr,begc)]
         dist = dict()
         source = dict()
@@ -224,21 +252,29 @@ class BioSlime:
         
         return None
 
-    def shortestPathToDepot(self,begr,begc,limit,explored,myload):
+    def shortestPathToDepot(self,h,limit,explored,myload,depotbusy):
+        begr,begc = self.har[h]
         
-        hp = []
-        for i,(dr,dc) in enumerate(self.depots):
-            hp.append((self.manhatdist(dr,dc,begr,begc),i))
-        
-        if hp:
-            unused,idx = min(hp)
-            dr,dc = self.depots[idx]
+        depotidx = self.depotAffinity[h]
+        if depotidx is None:
+            hp = []
+            for i,(dr,dc) in enumerate(self.depots):
+                if self.depotbad[i]:
+                    continue
+                hp.append((self.manhatdist(dr,dc,begr,begc),i))
+            
+            if hp:
+                unused,depotidx = min(hp)
+
+        if depotidx is not None:
+            dr,dc = self.depots[depotidx]
             return self.shortestPathAB(begr,begc,dr,dc,limit,explored,myload)
         return None
 
 
 
-    def shortestPathToSlime(self,begr,begc,limit,explored,myload):
+    def shortestPathToSlime(self,h,limit,explored,myload):
+        begr,begc = self.har[h]
         
         hp = []
         for i,(sr,sc) in enumerate(self.slimes):
@@ -250,7 +286,9 @@ class BioSlime:
             return self.shortestPathAB(begr,begc,sr,sc,limit,explored,myload)
         return None
 
-    def shortestPathToSlimeAny(self,begr,begc,limit,explored):
+    def shortestPathToSlimeAny(self,h,limit,explored):
+        begr,begh = self.har[h]
+        
         hp = [(0,begr,begc)]
         dist = dict()
         source = dict()
@@ -359,7 +397,9 @@ class BioSlime:
             return None # cannot collect slime
 
         if self.planPath[h] is None:
-            self.planPath[h] = self.shortestPathToSlime(r,c,self.RN*self.RN,explored,myload)
+            self.planPath[h] = self.shortestPathToSlime(h,self.RN*self.RN,explored,myload)
+        elif (self.turn%4) == 0: # re-evaluate
+            self.planPath[h] = self.shortestPathToSlime(h,self.RN*self.RN,explored,myload)
 
         if self.planPath[h] is None:
             return None
@@ -395,14 +435,22 @@ class BioSlime:
     def moveToNearestDepot(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
 
+        for nr,nc in self.iterMovesFindDepots(r,c,explored,myload):
+            if self.grid[nr][nc] == 'd':
+                self.planPath[h] = None
+                explored.add((nr,nc))
+                return self.calcDir(nr,nc,r,c)
+
         if self.planPath[h] is not None:
             (fr,fc),prev,actiontp = self.planPath[h]
             if self.grid[fr][fc] != 'd': # dipot is gone
                 self.planPath[h] = None
 
         if self.planPath[h] is None:
+            self.planPath[h] = self.shortestPathToDepot(h,self.N*self.N,explored,myload,depotbusy)
 
-            self.planPath[h] = self.shortestPathToDepot(r,c,self.N*self.N,explored,myload)
+        elif (self.turn%4) == 0: # re-evaluate
+            self.planPath[h] = self.shortestPathToDepot(h,self.N*self.N,explored,myload,depotbusy)
 
         if debugStrategy:
             eprint(h,r,c,'move to depot plan') #, self.planPath[h])
