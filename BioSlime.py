@@ -646,9 +646,17 @@ class BioSlime:
                     if debugStrategy:
                         eprint('No slime Moving to depot ',h,r,c, 'next move', moveCmds[h])
                 else:
-                    moveCmds[h] = self.moveAwayFromNearestDepot(h,explored,self.load[h],depotbusy)
-                    if debugStrategy:
-                        eprint('Harvester ',h,r,c, 'Moving away', moveCmds[h])
+                    pass
+                
+        for h,(r,c) in enumerate(self.har):
+            if moveCmds[h] is not None:
+                continue
+            if self.isNeighborBusy(h, moveCmds):
+                continue
+            if not self.load[h]:
+                moveCmds[h] = self.moveAwayFromNearestDepot(h,explored,self.load[h],depotbusy)
+                if debugStrategy:
+                    eprint('Harvester ',h,r,c, 'Moving away', moveCmds[h])
                 
         for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
