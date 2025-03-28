@@ -33,12 +33,12 @@ for f in files:
 
 print(table)
 print(table.keys())
-result = [None]*20
-for N in range(10,20): #range(10,31):
-    result[N] = [None]*5
-    for D in range(1,5): #range(1,11):
-        result[N][D] = [None]*16
-        for H in range(8,16):#range(1,21):
+result = [None]*31
+for N in range(10,31):
+    result[N] = [None]*11
+    for D in range(1,11):
+        result[N][D] = [None]*21
+        for H in range(1,21):
             bestscore = None
             bestparam = None
 
@@ -49,6 +49,6 @@ for N in range(10,20): #range(10,31):
                     if bestscore is None or bestscore < avscore:
                         bestscore = avscore
                         bestparam = param
-            result[N][D][H] = bestparam
+            result[N][D][H] = int(bestparam)
 
 print(result)
