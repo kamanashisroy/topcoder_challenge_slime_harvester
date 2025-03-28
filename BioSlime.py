@@ -3,11 +3,88 @@ import time
 import sys
 from heapq import heappop,heappush,heapify
 
+params = sys.argv[1:]
+#eprint(params)
+params = [int(x) for x in params]
+
+if len(params) < 2:
+    if len(params) < 1:
+        params = [3,800]
+    else:
+        params.append(800)
+
 debug = False
 debugStrategy=False
 debugMove = False
+debugCalStrategy=False
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+class CalibrationStrategy:
+
+    def __init__(self, N, C, H, PARAM_DIV, PARAM_CLEANUP_TURN):
+        self.N = N
+        self.C = C
+        self.H = H
+        self.PARAM_DIV = PARAM_DIV
+        self.PARAM_CLEANUP_TURN = PARAM_CLEANUP_TURN
+
+
+        # calibration logic
+        self.prevScore = 0
+        self.prevNumSlimes = 0
+        self.applcableCapacity = min(2,self.C)
+
+    def setupDepot(self,depotbad,depotscore):
+        self.depotbad = depotbad
+        self.depotscore = depotscore
+        self.D = len(self.depotbad)
+
+    def calculateScore(self, numSlimes):
+        
+        totalScore = self.N*self.N
+        totalScore -= numSlimes
+        for d in range(self.D):
+            if self.depotbad[d]:
+                continue
+            totalScore += self.depotscore[d]
+        return totalScore
+
+    def calculateApplicableCapacity(self, turn, slimes):
+
+        curNumSlimes = len(slimes)
+
+        if 0 == turn:
+            self.prevScore = self.calculateScore(curNumSlimes)
+            self.prevNumSlimes = len(slimes)
+            return self.applcableCapacity
+
+        if turn >= self.PARAM_CLEANUP_TURN: # At the end use highest capacity
+            self.applcableCapacity = self.C
+            return self.applcableCapacity
+
+        if (turn % 40) != 0:
+            return self.applcableCapacity
+
+        curScore = self.calculateScore(curNumSlimes)
+
+        if curNumSlimes < self.prevNumSlimes:
+            if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes/self.PARAM_DIV):
+                self.applcableCapacity = self.applcableCapacity>>1
+                #if self.applcableCapacity < 2:
+                #    self.applcableCapacity = 2
+        else:
+            if (curNumSlimes-self.prevNumSlimes) >= (self.prevNumSlimes/self.PARAM_DIV):
+                self.applcableCapacity = min(self.C,(self.applcableCapacity<<1))
+
+
+        self.prevScore = curScore
+        self.prevNumSlimes = len(slimes)
+
+        if debugCalStrategy:
+            eprint(turn, 'Applicable capacity', self.applcableCapacity)
+        return self.applcableCapacity
+ 
 
 class BioSlime:
     def __init__(self,tester):
@@ -33,52 +110,7 @@ class BioSlime:
         self.slimeId = dict()
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
-
-        # calibration logic
-        self.prevScore = 0
-        self.prevNumSlimes = 0
-        self.applcableCapacity = min(2,self.C)
-
-    def calculateScore(self):
-        
-        totalScore = self.N*self.N
-        totalScore -= len(self.slimes)
-        for d in range(self.D):
-            if self.depotbad[d]:
-                continue
-            totalScore += self.depotscore[d]
-        return totalScore
-
-    def calculateApplicableCapacity(self):
-        if self.turn >= 900: # At the end use highest capacity
-            self.applcableCapacity = self.C
-            return
-
-        if (self.turn % 40) != 0:
-            return
-
-        if 0 == self.turn:
-            self.prevScore = self.calculateScore()
-            self.prevNumSlimes = len(self.slimes)
-            return
-
-        curScore = self.calculateScore()
-        curNumSlimes = len(self.slimes)
-
-        if curNumSlimes < self.prevNumSlimes:
-            if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes>>1):
-                self.applcableCapacity = self.applcableCapacity>>1
-                #if self.applcableCapacity < 2:
-                #    self.applcableCapacity = 2
-        else:
-            self.applcableCapacity = min(self.C,(self.applcableCapacity<<1))
-
-
-        self.prevScore = curScore
-        self.prevNumSlimes = len(self.slimes)
-
-        eprint(self.turn, 'Applicable capacity', self.applcableCapacity)
-        
+        self.calStrategy = CalibrationStrategy(self.N,self.C,self.H,params[0],params[1])
 
     def setup(self):
         # Read the location of each harvester
@@ -97,6 +129,7 @@ class BioSlime:
         self.D = len(self.depots)
         self.depotbad = [False]*self.D
         self.depotscore = [0]*self.D
+        self.calStrategy.setupDepot(self.depotbad,self.depotscore)
 
         # This path will be useful to return to depot
         self.buildShortestPathFromDepot()
@@ -698,7 +731,7 @@ class BioSlime:
                 
         #self.slimeSubGrids = self.buildSlimeSubGrids(slimes)
 
-        self.calculateApplicableCapacity()
+        applcableCapacity = self.calStrategy.calculateApplicableCapacity(turn, self.slimes)
         depotbusy = self.depotbad[:]
 
         for h,(r,c) in enumerate(self.har):
@@ -733,7 +766,7 @@ class BioSlime:
                 continue
             if self.isNeighborBusy(h, moveCmds):
                 continue
-            if self.load[h]>=self.applcableCapacity:
+            if self.load[h]>=applcableCapacity:
                 moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
                 if debugStrategy:
                     eprint('Harvester ',h,r,c, 'moving to nearestet depot via new path', moveCmds[h])
