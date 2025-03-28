@@ -26,7 +26,8 @@ class BioSlime:
             self.RN += 1
 
         self.planPath = [None]*self.H
-
+        self.turn = 0
+        self.wanderMoves = [None]*self.H
 
     def setup(self):
         # Read the location of each harvester
@@ -47,7 +48,6 @@ class BioSlime:
 
         # This path will be useful to return to depot
         self.buildShortestPathFromDepot()
-        self.buildGarrages()
 
     def buildShortestPathFromDepot(self):
         self.shortestPathFromDepot = [None]*self.D
@@ -55,41 +55,6 @@ class BioSlime:
             if not self.depotbad[i]:
                 self.shortestPathFromDepot[i] = self.shortestPath(r,c)
 
-
-    def buildGarrages(self):
-        self.garrages = [None]*self.H
-        numGarrages = 0
-        #harvgrids = self.buildHarvestorSubGrids()
-        self.shortestPathFromGarrages = [None]*self.H
-        # Make a resting point for all the harvesters
-        for r in range(self.N):
-            for c in range(self.N):
-                if numGarrages == self.H:
-                    return
-                if c<0 or c>=self.N or r<0 or r>=self.N or self.grid[r][c]=='W' or self.grid[r][c] == 'd':
-                    continue
-                for g in self.garrages:
-                    if g is not None and self.manhatdist(g[0],g[1],r,c) < 10:
-                        break
-                else:
-
-                    gidx = None
-                    for h in range(self.H):
-                        if self.garrages[h] is not None:
-                            continue
-                        if gidx is None:
-                            gidx = h
-                        else:
-                            hr,hc = self.har[h]
-                            gr,gc = self.har[gidx]
-                            if self.manhatdist(hr,hc,r,c) < self.manhatdist(gr,gc,r,c):
-                                gidx = h
-
-                    if gidx is not None:
-                        self.garrages[gidx] = (r,c)
-                        self.shortestPathFromGarrages[gidx] = self.shortestPath(r,c)
-                        numGarrages += 1
-                    
 
     def assertPath(self,d,nr,nc,r,c):
         nr2 = r + self.dr[d]
@@ -105,6 +70,16 @@ class BioSlime:
             if distr == self.dr[d] and distc == self.dc[d]:
                 self.assertPath(d,nr,nc,r,c)
                 return d
+
+    def iterMovesFindDepots(self,r,c,explored,myload):
+        for d in range(4):
+            nr = r + self.dr[d]
+            nc = c + self.dc[d]
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W':
+                continue
+            if (nr,nc) in explored or (myload >= self.C and self.grid[nr][nc] == 's'):
+                continue
+            yield (nr,nc)
 
     def iterMoves(self,r,c):
         for d in range(4):
@@ -153,7 +128,7 @@ class BioSlime:
         #eprint(r,c,'Done',dist)
         return [dist,source]        
 
-    def buildPathToSlime(self,begr,begc,r,c,dist,source,explored):
+    def buildPathToGoal(self,begr,begc,r,c,dist,source,explored,goal):
         curdist = dist[(r,c)]
         prev = dict()
         #eprint(begr,begc,'found s',r,c)
@@ -168,7 +143,7 @@ class BioSlime:
                 #eprint(begr,begc,'Should move to ',rr,cc,'to collect', r,c,'dist',curdist)
                 #self.grid[r][c] = '.' # do not allow others find it
                 prev[(begr,begc)] = (rr,cc)
-                return [(r,c),prev,'s']
+                return [(r,c),prev,goal]
             if rr == begr and cc == begc:
                 continue
             for pr,pc in source[(rr,cc)]:
@@ -177,6 +152,7 @@ class BioSlime:
                 stack.append( (cost+1,pr,pc))
                 prev[(pr,pc)] = (rr,cc)
         return None
+
 
     def buildPathToDepot(self,depr,depc,r,c,dist,source,explored):
         prev = dict()
@@ -195,6 +171,42 @@ class BioSlime:
                 return None
         return [(depr,depc),prev,'d']
 
+    def shortestPathToDepot(self,begr,begc,limit,explored,myload):
+        hp = [(0,begr,begc)]
+        dist = dict()
+        source = dict()
+        dist[(begr,begc)] = 0
+
+        if debug:
+            eprint(begr,begc,'shortestPathToDepot~~~~ ')
+        while hp:
+            curdist, r, c = heappop(hp)
+            if curdist > dist[(r,c)]:
+                continue
+            if self.grid[r][c] == 'd' and (begr,begc) != (r,c):
+                if debug:
+                    eprint(begr,begc,'shortestPathToDepot found depot', r,c)
+
+                p = self.buildPathToGoal(begr,begc,r,c,dist,source,explored,'d')
+                if p is not None:
+                    return p
+                if debug:
+                    eprint(begr,begc,'shortestPathToDepot No path to depot', r,c)
+                #eprint(begr,begc,'No steps to take!')
+                #return None,None
+            #if curdist > limit:
+            #   return None
+
+            for nr,nc in self.iterMovesFindDepots(r,c,explored,myload):
+                if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
+                    dist[(nr,nc)] = curdist+1
+                    source[(nr,nc)] = []
+                    heappush(hp,(curdist+1,nr,nc))
+                if dist[(nr,nc)] >= (curdist+1):
+                    source[(nr,nc)].append((r,c))
+        
+        return None
+
 
 
     def shortestPathToSlime(self,begr,begc,limit,explored):
@@ -209,7 +221,7 @@ class BioSlime:
                 continue
             if self.grid[r][c] == 's' and (begr,begc) != (r,c):
 
-                p = self.buildPathToSlime(begr,begc,r,c,dist,source,explored)
+                p = self.buildPathToGoal(begr,begc,r,c,dist,source,explored,'s')
                 if p is not None:
                     return p
                 #eprint(begr,begc,'No steps to take!')
@@ -326,6 +338,8 @@ class BioSlime:
         nr,nc = prev[(r,c)]
         if (nr,nc) in explored:
             # wait for other planPath[h] = None
+            if self.turn%4 == 0:
+                self.planPath[h] = None # find new path
             return None # FIXME should we scatter here ?
         if self.grid[nr][nc] == 's' and myload >= self.C:
             self.planPath[h] = None
@@ -347,6 +361,7 @@ class BioSlime:
 
         if self.planPath[h] is None:
 
+            '''
             dist = []
             for i in range(self.D):
                 if depotbusy[i]:
@@ -369,9 +384,12 @@ class BioSlime:
             disttable,sourcetable = self.shortestPathFromDepot[nearest]
             
             self.planPath[h] = self.buildPathToDepot(fr,fc,r,c,disttable,sourcetable,explored)
+            '''
+            
+            self.planPath[h] = self.shortestPathToDepot(r,c,self.N*self.N,explored,myload)
 
         if debug:
-            eprint(h,r,c,'plan', self.planPath[h])
+            eprint(h,r,c,'move to depot plan', self.planPath[h])
         if self.planPath[h] is None:
             return None
 
@@ -395,6 +413,8 @@ class BioSlime:
             # wait for other planPath[h] = None
             if debug:
                 eprint(h,r,c,'move is occupied', nr,nc)
+            if self.turn%4 == 0:
+                self.planPath[h] = None # find new path
             return None # FIXME should we scatter here ?
         if self.grid[nr][nc] == 's' and myload >= self.C:
             self.planPath[h] = None
@@ -452,33 +472,26 @@ class BioSlime:
         return None
 
 
-    def moveToNearestGarrage(self,h,explored, myload, depotbusy):
+    def wander(self, h, explored, myload, depotbusy):
         r,c = self.har[h]
-        nearest,nearestg = None,None
-        for i,g in enumerate(self.garrages):
-            if g is not None:
-                if nearest is None or self.manhatdist(nearestg[0],nearestg[1],r,c) >  self.manhatdist(g[0],g[1],r,c):
-                    nearest = i
-                    nearestg = g
-        if nearest is None or self.shortestPathFromGarrages[nearest] is None:
-            return None
 
-        # now find the path to nearest depot
-        source = self.shortestPathFromGarrages[nearest][1]
-        #eprint(source,r,c,source[r][c])
-        if (r,c) not in source: # path broke
-            return None
+        if self.wanderMoves[h] is None:
+            self.wanderMoves[h] = 0
         
-        lr,lc = source[(r,c)][0]
-        for lr,lc in source[(r,c)]:
-            if (lr,lc) in explored or (myload >= self.C and self.grid[lr][lc] == 's'):
+        for d in range(4):
+            nd = (self.wanderMoves[h]+d)%4
+            nr = r+self.dr[nd]
+            nc = c+self.dr[nd]
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W' or self.grid[nr][nc] == 'd':
                 continue
-            assert((r,c) in explored)
-            if self.grid[lr][lc] != 'd':
-                #explored.remove((r,c))
-                explored.add((lr,lc))
-            return self.calcDir(lr,lc,r,c)
+            if (nr,nc) in explored or (myload >= self.C and self.grid[nr][nc] == 's'):
+                continue
+            
+            self.wanderMoves[h] = nd
+            explored.add((nr,nc))
+            return self.calcDir(nr,nc,r,c)
         return None
+        
 
     def sendMoves(self, moveCmds):
         if debug:
@@ -551,6 +564,7 @@ class BioSlime:
  
     def run(self,turn):
 
+        self.turn = turn
         explored = set()
 
         # find the slimes and nearest harvestors
@@ -610,20 +624,25 @@ class BioSlime:
                 moveCmds[h] = self.collectSlime(h,explored,self.load[h],None)
                 if debug:
                     eprint('Harvester ',h,r,c, 'Collecting slime in new path', moveCmds[h])
-                 
+            else:
+                if self.load[h]:
+                    moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
+                    if debug:
+                        eprint('No slime Moving to depot ',h,r,c, 'next move', moveCmds[h])
+                else:
+                    moveCmds[h] = self.moveAwayFromNearestDepot(h,explored,self.load[h],depotbusy)
+                    if debug:
+                        eprint('Harvester ',h,r,c, 'Moving away', moveCmds[h])
+                
         for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
                 continue
-            if self.load[h]:
-                if self.isNeighborBusy(h, moveCmds):
-                    continue
-                moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
+            #if self.isNeighborBusy(h, moveCmds):
+            #    continue
+            if not self.load[h]:
+                moveCmds[h] = self.wander(h, explored, self.load[h], depotbusy)
                 if debug:
-                    eprint('Harvester ',h,r,c, 'Moving to nearest depot', moveCmds[h])
-            else:
-                moveCmds[h] = self.moveAwayFromNearestDepot(h,explored,self.load[h],depotbusy)
-                if debug:
-                    eprint('Harvester ',h,r,c, 'Moving away', moveCmds[h])
+                    eprint('Wandering ',h,r,c, 'Moving away', moveCmds[h])
  
 
      
