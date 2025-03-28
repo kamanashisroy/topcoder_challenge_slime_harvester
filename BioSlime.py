@@ -275,10 +275,15 @@ class BioSlime:
 
     def shortestPathToSlime(self,h,limit,explored,myload):
         begr,begc = self.har[h]
+        # we need to return to depot after grabbing slime
+        depotidx = self.depotAffinity[h]
+        if depotidx is None:
+            depotidx = 0
+        dr,dc = self.depots[depotidx]
         
         hp = []
         for i,(sr,sc) in enumerate(self.slimes):
-            hp.append((self.manhatdist(sr,sc,begr,begc),i))
+            hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),i))
         
         if hp:
             unused,idx = min(hp)
