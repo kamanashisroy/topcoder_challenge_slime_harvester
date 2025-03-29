@@ -1,29 +1,24 @@
 
+import random
+import argparse
 import time
 import sys
+from collections import defaultdict
 from heapq import heappop,heappush,heapify
 
-params = sys.argv[1:]
-#eprint(params)
-params = [int(x) for x in params]
-
-bestParams = [None, None, None, None, None, None, None, None, None, None, [None, [None, 2, 5, 3, 3, 4, 2, 1, 1, 4, 7, 2, 4, 7, 5, 6, 5, 1, 5, 5, 5], [None, 5, 5, 2, 1, 5, 5, 4, 1, 6, 2, 2, 7, 2, 5, 3, 1, 3, 3, 4, 3], [None, 4, 4, 5, 2, 5, 4, 5, 4, 5, 4, 7, 2, 3, 1, 2, 4, 5, 5, 1, 1], [None, 4, 3, 1, 2, 4, 2, 3, 5, 1, 2, 4, 1, 4, 3, 4, 4, 5, 3, 4, 3], [None, 3, 5, 1, 1, 3, 1, 1, 3, 1, 4, 1, 2, 1, 4, 2, 1, 2, 1, 3, 2], [None, 3, 4, 3, 2, 1, 3, 3, 3, 4, 2, 3, 1, 5, 5, 3, 2, 2, 1, 3, 3], [None, 4, 1, 2, 5, 1, 4, 1, 5, 5, 4, 1, 2, 2, 2, 5, 3, 5, 5, 5, 2], [None, 5, 5, 2, 1, 4, 4, 2, 3, 5, 5, 1, 5, 3, 1, 5, 5, 2, 4, 5, 2], [None, 5, 1, 3, 1, 5, 4, 5, 5, 2, 3, 1, 1, 3, 5, 2, 2, 3, 3, 5, 2], [None, 3, 5, 1, 2, 2, 1, 5, 2, 5, 5, 5, 2, 3, 2, 1, 1, 5, 3, 1, 3]], [None, [None, 4, 1, 1, 1, 1, 2, 1, 6, 2, 4, 7, 5, 2, 5, 5, 4, 2, 5, 1, 5], [None, 3, 5, 3, 4, 4, 5, 2, 3, 7, 3, 4, 7, 6, 6, 2, 1, 1, 2, 4, 1], [None, 1, 2, 2, 3, 2, 5, 2, 2, 1, 7, 2, 5, 6, 3, 3, 3, 3, 3, 1, 1], [None, 1, 5, 3, 4, 2, 1, 1, 4, 1, 5, 3, 7, 5, 5, 1, 4, 5, 4, 2, 5], [None, 2, 3, 5, 5, 4, 2, 1, 4, 1, 2, 3, 2, 1, 5, 4, 1, 5, 3, 3, 3], [None, 1, 4, 3, 2, 1, 2, 3, 5, 3, 1, 2, 5, 3, 2, 2, 4, 3, 3, 3, 2], [None, 2, 5, 2, 1, 2, 3, 4, 2, 3, 4, 4, 3, 1, 4, 1, 2, 4, 5, 5, 3], [None, 3, 5, 1, 3, 1, 5, 2, 3, 4, 4, 3, 2, 4, 4, 3, 1, 5, 4, 3, 5], [None, 2, 5, 5, 3, 3, 5, 5, 4, 4, 5, 5, 3, 3, 5, 5, 2, 2, 2, 1, 5], [None, 3, 4, 4, 5, 4, 3, 3, 4, 5, 5, 5, 2, 1, 5, 3, 5, 2, 1, 4, 3]], [None, [None, 4, 4, 4, 3, 2, 3, 5, 2, 1, 4, 2, 3, 3, 1, 2, 3, 2, 2, 1, 5], [None, 1, 4, 2, 5, 1, 3, 2, 3, 1, 4, 6, 3, 1, 1, 1, 1, 1, 4, 1, 2], [None, 3, 2, 4, 1, 2, 3, 4, 6, 1, 2, 3, 1, 1, 3, 2, 1, 4, 5, 1, 4], [None, 3, 4, 3, 1, 2, 5, 3, 2, 1, 1, 1, 4, 5, 1, 5, 5, 3, 5, 1, 1], [None, 4, 1, 5, 3, 4, 3, 2, 4, 1, 5, 1, 3, 3, 2, 2, 4, 1, 3, 1, 2], [None, 2, 2, 1, 3, 2, 5, 3, 4, 1, 3, 2, 1, 1, 1, 2, 3, 3, 1, 5, 4], [None, 2, 3, 5, 2, 1, 4, 2, 1, 2, 2, 1, 5, 2, 2, 2, 1, 1, 3, 3, 5], [None, 4, 3, 4, 1, 5, 5, 1, 4, 1, 3, 2, 1, 3, 5, 1, 5, 3, 1, 2, 3], [None, 1, 5, 3, 4, 1, 3, 3, 2, 5, 3, 1, 1, 2, 3, 4, 3, 2, 5, 4, 5], [None, 3, 5, 3, 2, 3, 2, 2, 1, 2, 4, 3, 1, 4, 1, 4, 5, 3, 2, 5, 5]], [None, [None, 1, 3, 1, 4, 5, 3, 1, 2, 3, 1, 1, 1, 7, 3, 6, 5, 5, 3, 2, 1], [None, 2, 3, 5, 3, 4, 5, 3, 7, 7, 4, 4, 3, 4, 1, 5, 2, 4, 2, 5, 3], [None, 5, 2, 5, 5, 4, 3, 1, 1, 2, 7, 2, 2, 4, 7, 6, 5, 4, 2, 3, 3], [None, 2, 1, 4, 4, 2, 1, 5, 1, 2, 4, 3, 4, 1, 6, 6, 2, 4, 5, 1, 5], [None, 2, 4, 5, 5, 2, 2, 1, 3, 2, 4, 5, 3, 2, 5, 1, 1, 1, 2, 4, 5], [None, 1, 1, 1, 5, 4, 1, 5, 1, 2, 3, 2, 2, 3, 1, 2, 5, 1, 2, 4, 3], [None, 4, 1, 5, 1, 4, 4, 2, 3, 1, 1, 1, 4, 5, 2, 5, 1, 4, 1, 4, 3], [None, 1, 4, 1, 1, 1, 4, 3, 4, 1, 2, 4, 4, 2, 4, 2, 3, 2, 1, 2, 4], [None, 1, 1, 1, 2, 1, 1, 5, 3, 2, 1, 1, 2, 2, 3, 2, 2, 5, 2, 5, 2], [None, 4, 1, 5, 1, 2, 5, 4, 1, 3, 2, 5, 4, 3, 4, 5, 1, 5, 3, 5, 2]], [None, [None, 1, 4, 5, 4, 2, 1, 1, 1, 1, 7, 1, 6, 4, 1, 1, 4, 5, 2, 3, 4], [None, 4, 1, 4, 5, 3, 1, 1, 2, 3, 1, 1, 1, 2, 3, 2, 5, 1, 1, 5, 2], [None, 2, 3, 4, 3, 1, 2, 3, 1, 1, 1, 7, 2, 7, 7, 5, 2, 2, 5, 5, 4], [None, 1, 2, 3, 2, 4, 5, 2, 3, 4, 1, 2, 6, 2, 4, 3, 3, 1, 1, 4, 4], [None, 4, 4, 4, 2, 1, 4, 1, 1, 3, 3, 1, 4, 2, 4, 4, 1, 5, 1, 4, 4], [None, 4, 2, 3, 5, 3, 4, 3, 1, 1, 1, 3, 4, 1, 2, 5, 3, 1, 3, 4, 3], [None, 5, 5, 3, 5, 5, 5, 4, 1, 5, 5, 4, 3, 3, 3, 1, 3, 1, 1, 3, 5], [None, 1, 3, 1, 5, 5, 1, 1, 3, 3, 1, 4, 4, 2, 4, 3, 3, 5, 3, 5, 4], [None, 1, 2, 4, 5, 2, 1, 2, 3, 1, 3, 4, 5, 3, 5, 2, 4, 2, 3, 5, 3], [None, 5, 3, 4, 4, 2, 1, 4, 1, 1, 2, 4, 2, 3, 4, 4, 1, 5, 3, 1, 1]], [None, [None, 1, 2, 3, 5, 5, 3, 3, 3, 2, 3, 6, 5, 6, 5, 3, 1, 5, 2, 3, 3], [None, 3, 1, 5, 4, 1, 1, 1, 4, 7, 5, 1, 7, 1, 2, 7, 5, 2, 5, 4, 3], [None, 1, 5, 5, 4, 4, 1, 1, 3, 1, 4, 2, 1, 4, 2, 2, 5, 4, 1, 5, 5], [None, 1, 5, 3, 3, 3, 3, 5, 7, 2, 5, 4, 4, 2, 1, 6, 2, 1, 4, 5, 2], [None, 1, 4, 4, 4, 2, 2, 3, 4, 5, 1, 3, 3, 5, 1, 5, 1, 1, 5, 3, 5], [None, 1, 3, 2, 4, 3, 2, 5, 3, 5, 5, 2, 1, 1, 2, 5, 5, 5, 3, 5, 1], [None, 1, 1, 1, 5, 2, 3, 4, 5, 3, 4, 5, 4, 1, 5, 1, 2, 4, 4, 5, 5], [None, 1, 3, 2, 1, 4, 4, 5, 3, 5, 4, 1, 4, 5, 1, 5, 5, 5, 5, 4, 1], [None, 1, 4, 5, 5, 2, 3, 1, 1, 5, 5, 2, 3, 5, 5, 2, 5, 3, 1, 4, 5], [None, 1, 5, 5, 1, 4, 4, 2, 4, 1, 3, 1, 1, 3, 1, 3, 5, 5, 3, 1, 2]], [None, [None, 1, 5, 4, 3, 5, 2, 2, 6, 3, 1, 1, 7, 5, 1, 4, 1, 1, 4, 1, 3], [None, 2, 5, 2, 5, 4, 2, 1, 5, 1, 3, 1, 2, 4, 6, 2, 5, 4, 3, 2, 2], [None, 3, 2, 4, 5, 3, 3, 5, 6, 4, 1, 1, 7, 5, 4, 1, 3, 5, 5, 5, 5], [None, 2, 3, 4, 4, 5, 1, 4, 2, 6, 3, 4, 4, 7, 3, 2, 3, 2, 5, 4, 2], [None, 2, 4, 2, 4, 2, 5, 1, 5, 3, 1, 3, 4, 5, 1, 3, 4, 4, 3, 2, 4], [None, 1, 3, 2, 4, 1, 4, 3, 5, 3, 1, 4, 5, 4, 1, 3, 4, 2, 4, 3, 2], [None, 5, 4, 2, 1, 5, 5, 2, 2, 1, 5, 2, 3, 3, 3, 5, 3, 4, 5, 3, 4], [None, 4, 5, 3, 2, 3, 5, 2, 3, 1, 4, 4, 3, 2, 4, 5, 2, 1, 2, 1, 3], [None, 5, 4, 5, 2, 4, 3, 4, 1, 2, 5, 2, 2, 5, 4, 5, 2, 4, 2, 2, 2], [None, 4, 5, 3, 5, 5, 5, 1, 1, 1, 3, 1, 1, 4, 4, 1, 1, 3, 5, 5, 3]], [None, [None, 5, 1, 5, 5, 3, 3, 4, 2, 7, 4, 1, 1, 3, 3, 7, 1, 2, 5, 4, 5], [None, 5, 3, 4, 3, 1, 5, 1, 3, 1, 2, 2, 6, 5, 3, 1, 4, 4, 1, 5, 5], [None, 4, 1, 5, 2, 5, 4, 3, 4, 1, 7, 5, 7, 7, 1, 6, 1, 5, 3, 5, 5], [None, 5, 4, 3, 3, 5, 3, 5, 6, 4, 1, 2, 4, 3, 7, 5, 4, 1, 2, 3, 3], [None, 5, 1, 1, 1, 4, 5, 4, 5, 4, 3, 4, 1, 1, 5, 5, 4, 3, 1, 1, 4], [None, 2, 4, 2, 4, 1, 5, 2, 1, 2, 4, 2, 1, 1, 5, 4, 2, 1, 3, 3, 2], [None, 4, 5, 2, 2, 5, 5, 3, 1, 2, 1, 1, 1, 1, 2, 5, 5, 5, 5, 2, 4], [None, 4, 3, 5, 4, 3, 1, 3, 1, 1, 3, 3, 4, 2, 5, 5, 4, 5, 4, 5, 3], [None, 5, 2, 4, 1, 3, 5, 4, 4, 4, 5, 4, 2, 5, 5, 5, 2, 3, 5, 3, 1], [None, 4, 5, 3, 3, 1, 4, 5, 5, 4, 4, 3, 3, 2, 4, 4, 1, 2, 5, 1, 1]], [None, [None, 3, 4, 4, 1, 3, 1, 2, 2, 4, 1, 1, 4, 7, 3, 7, 5, 5, 1, 2, 5], [None, 2, 5, 4, 4, 2, 1, 5, 3, 2, 5, 6, 4, 4, 6, 3, 2, 5, 1, 5, 5], [None, 2, 5, 1, 5, 1, 1, 1, 4, 2, 5, 6, 3, 3, 1, 4, 3, 3, 2, 3, 1], [None, 5, 5, 5, 1, 1, 5, 5, 4, 5, 6, 5, 4, 5, 5, 4, 1, 4, 5, 3, 1], [None, 4, 2, 2, 4, 3, 4, 2, 3, 5, 3, 5, 2, 5, 4, 1, 4, 3, 2, 1, 1], [None, 1, 4, 1, 3, 3, 2, 3, 4, 1, 3, 2, 3, 2, 3, 1, 2, 1, 1, 1, 1], [None, 4, 4, 4, 1, 4, 1, 4, 1, 4, 2, 3, 2, 4, 4, 4, 1, 4, 1, 2, 1], [None, 2, 1, 4, 4, 3, 3, 4, 4, 4, 1, 1, 4, 2, 4, 3, 1, 4, 3, 2, 4], [None, 3, 2, 1, 1, 2, 1, 1, 4, 1, 4, 1, 1, 4, 3, 4, 4, 3, 1, 1, 1], [None, 1, 1, 3, 1, 2, 3, 1, 1, 2, 1, 2, 3, 1, 3, 2, 1, 3, 2, 3, 2]], [None, [None, 1, 3, 3, 4, 4, 4, 3, 4, 5, 5, 7, 2, 2, 7, 5, 3, 2, 2, 3, 1], [None, 2, 1, 4, 4, 3, 3, 4, 3, 7, 6, 7, 1, 1, 7, 1, 3, 1, 1, 4, 3], [None, 1, 3, 4, 3, 3, 4, 3, 3, 1, 7, 6, 5, 1, 1, 2, 1, 3, 2, 2, 1], [None, 3, 4, 1, 1, 1, 4, 4, 7, 5, 2, 1, 6, 4, 1, 6, 4, 2, 2, 4, 1], [None, 1, 1, 4, 3, 3, 4, 4, 4, 4, 3, 3, 4, 2, 2, 2, 4, 3, 4, 4, 3], [None, 2, 4, 4, 4, 3, 4, 1, 2, 2, 1, 2, 4, 4, 2, 2, 2, 2, 4, 4, 4], [None, 2, 4, 3, 4, 4, 4, 4, 1, 1, 3, 4, 1, 4, 3, 4, 2, 3, 2, 4, 3], [None, 2, 2, 4, 3, 3, 4, 2, 1, 2, 1, 2, 1, 2, 3, 4, 4, 4, 2, 2, 1], [None, 2, 4, 4, 2, 2, 4, 2, 3, 4, 2, 3, 4, 2, 2, 3, 4, 2, 1, 3, 2], [None, 2, 4, 4, 1, 4, 4, 4, 3, 1, 4, 2, 1, 4, 4, 3, 4, 2, 2, 4, 1]], [None, [None, 1, 2, 4, 3, 3, 4, 4, 4, 4, 4, 2, 4, 4, 3, 4, 4, 1, 2, 2, 4], [None, 1, 3, 3, 4, 4, 2, 4, 4, 4, 3, 1, 4, 1, 4, 2, 3, 2, 4, 4, 3], [None, 3, 2, 1, 4, 3, 4, 4, 4, 1, 2, 3, 3, 3, 2, 4, 4, 3, 4, 2, 3], [None, 1, 2, 4, 3, 4, 4, 1, 4, 1, 4, 4, 4, 3, 3, 3, 3, 1, 3, 3, 4], [None, 2, 1, 4, 4, 4, 4, 3, 4, 3, 1, 4, 4, 4, 3, 4, 4, 1, 2, 4, 3], [None, 3, 4, 3, 4, 4, 4, 4, 1, 2, 3, 3, 3, 3, 3, 3, 2, 2, 4, 2, 4], [None, 1, 1, 4, 3, 3, 4, 1, 1, 2, 4, 3, 4, 4, 4, 4, 4, 3, 2, 3, 4], [None, 2, 1, 2, 4, 3, 4, 2, 1, 3, 4, 4, 4, 4, 4, 3, 3, 3, 3, 4, 3], [None, 1, 1, 3, 3, 3, 4, 2, 4, 4, 4, 4, 3, 2, 4, 4, 3, 2, 4, 3, 4], [None, 4, 1, 4, 4, 1, 4, 4, 3, 3, 3, 3, 3, 3, 4, 3, 2, 4, 3, 4, 4]], [None, [None, 1, 2, 1, 3, 2, 1, 2, 2, 2, 4, 3, 2, 3, 2, 3, 3, 4, 1, 3, 3], [None, 2, 2, 2, 1, 4, 4, 3, 4, 3, 4, 4, 1, 4, 2, 1, 3, 1, 1, 1, 4], [None, 1, 1, 1, 4, 1, 2, 1, 3, 1, 3, 3, 3, 2, 2, 2, 1, 4, 3, 3, 3], [None, 3, 1, 1, 2, 4, 4, 3, 3, 4, 4, 3, 1, 4, 3, 3, 1, 4, 4, 1, 2], [None, 4, 1, 1, 4, 1, 4, 4, 4, 1, 1, 3, 1, 4, 2, 4, 2, 4, 4, 1, 2], [None, 1, 4, 3, 3, 4, 3, 4, 4, 4, 1, 2, 2, 4, 2, 2, 4, 4, 4, 3, 4], [None, 4, 4, 1, 4, 3, 2, 4, 4, 1, 4, 3, 4, 1, 4, 4, 2, 4, 3, 2, 3], [None, 4, 3, 3, 3, 1, 4, 4, 4, 4, 1, 3, 1, 2, 3, 3, 4, 4, 2, 1, 4], [None, 1, 1, 4, 1, 1, 2, 4, 4, 1, 1, 4, 4, 3, 4, 4, 4, 3, 4, 4, 4], [None, 1, 2, 3, 4, 3, 3, 4, 3, 3, 4, 3, 3, 4, 2, 3, 4, 4, 3, 4, 3]], [None, [None, 1, 1, 2, 4, 2, 2, 4, 4, 3, 4, 4, 4, 3, 2, 4, 3, 1, 4, 2, 2], [None, 1, 3, 1, 1, 2, 1, 3, 4, 3, 3, 1, 4, 2, 3, 1, 3, 1, 2, 4, 4], [None, 1, 4, 2, 3, 3, 4, 4, 3, 4, 1, 1, 2, 1, 2, 1, 2, 3, 3, 1, 4], [None, 4, 1, 3, 4, 4, 2, 1, 4, 1, 1, 1, 2, 1, 1, 1, 3, 3, 3, 1, 1], [None, 1, 3, 1, 1, 3, 3, 4, 2, 2, 4, 1, 1, 3, 2, 4, 1, 4, 3, 4, 2], [None, 1, 2, 3, 3, 3, 3, 4, 3, 3, 1, 1, 1, 4, 4, 1, 4, 1, 4, 3, 2], [None, 4, 1, 3, 4, 3, 2, 3, 4, 2, 1, 3, 4, 1, 3, 4, 2, 3, 4, 4, 2], [None, 1, 3, 4, 2, 2, 4, 4, 3, 4, 2, 1, 2, 2, 4, 4, 4, 1, 4, 2, 4], [None, 1, 1, 2, 3, 3, 4, 1, 4, 3, 1, 2, 4, 2, 3, 3, 4, 2, 3, 4, 4], [None, 1, 3, 4, 3, 3, 4, 4, 3, 4, 3, 4, 2, 3, 3, 2, 4, 4, 2, 4, 3]], [None, [None, 1, 3, 3, 2, 2, 4, 3, 3, 2, 3, 2, 4, 3, 4, 3, 4, 4, 3, 3, 4], [None, 1, 4, 2, 4, 4, 4, 3, 4, 1, 2, 3, 4, 3, 4, 4, 2, 3, 4, 3, 4], [None, 2, 1, 4, 4, 4, 3, 3, 4, 1, 2, 2, 1, 4, 1, 1, 1, 2, 1, 2, 2], [None, 3, 1, 3, 3, 3, 4, 4, 3, 4, 4, 4, 3, 2, 2, 4, 1, 3, 2, 4, 1], [None, 1, 4, 3, 4, 3, 4, 4, 3, 4, 1, 4, 4, 3, 3, 3, 4, 4, 4, 4, 3], [None, 3, 2, 4, 2, 3, 4, 4, 3, 4, 4, 1, 3, 1, 2, 2, 2, 4, 3, 3, 4], [None, 3, 2, 4, 3, 3, 4, 4, 4, 4, 2, 2, 4, 4, 4, 2, 1, 3, 4, 3, 2], [None, 3, 4, 3, 3, 3, 4, 4, 3, 1, 1, 2, 1, 2, 1, 1, 4, 2, 4, 4, 4], [None, 1, 1, 3, 4, 3, 4, 4, 3, 3, 3, 3, 1, 2, 3, 4, 4, 3, 2, 3, 4], [None, 3, 3, 3, 4, 4, 4, 2, 1, 4, 1, 1, 3, 4, 2, 1, 3, 2, 4, 3, 4]], [None, [None, 3, 3, 1, 1, 4, 4, 3, 2, 2, 4, 4, 3, 4, 3, 2, 4, 3, 3, 4, 4], [None, 1, 4, 3, 4, 2, 3, 1, 3, 4, 3, 3, 3, 4, 4, 4, 4, 4, 4, 3, 1], [None, 3, 1, 2, 1, 3, 3, 3, 2, 4, 3, 4, 3, 3, 2, 4, 2, 4, 4, 1, 4], [None, 4, 2, 4, 1, 4, 2, 2, 3, 3, 4, 3, 3, 4, 4, 4, 4, 1, 1, 4, 4], [None, 4, 4, 2, 4, 3, 4, 2, 4, 3, 2, 2, 2, 1, 1, 1, 1, 1, 3, 1, 2], [None, 4, 4, 4, 4, 1, 2, 2, 4, 4, 2, 3, 1, 4, 4, 1, 2, 1, 2, 1, 2], [None, 3, 2, 2, 1, 1, 4, 2, 4, 4, 3, 3, 3, 2, 2, 4, 1, 3, 1, 2, 3], [None, 4, 3, 3, 4, 1, 3, 4, 4, 1, 4, 2, 4, 2, 1, 2, 1, 3, 1, 4, 3], [None, 3, 2, 2, 1, 2, 3, 2, 3, 4, 4, 2, 2, 2, 2, 4, 4, 4, 3, 4, 3], [None, 1, 4, 4, 2, 2, 4, 3, 3, 4, 2, 2, 4, 1, 3, 4, 4, 4, 3, 3, 2]], [None, [None, 2, 2, 2, 1, 4, 3, 3, 4, 1, 2, 2, 1, 4, 3, 4, 3, 4, 1, 1, 4], [None, 3, 3, 2, 4, 2, 3, 2, 2, 2, 3, 1, 3, 2, 3, 1, 1, 3, 2, 2, 2], [None, 3, 4, 3, 2, 1, 2, 2, 4, 3, 1, 1, 2, 1, 2, 3, 4, 4, 2, 1, 2], [None, 1, 4, 3, 1, 2, 2, 1, 1, 3, 1, 2, 4, 4, 3, 1, 4, 4, 2, 4, 2], [None, 3, 2, 1, 3, 2, 3, 4, 1, 3, 1, 1, 3, 1, 1, 1, 2, 4, 3, 4, 2], [None, 1, 1, 1, 1, 1, 2, 1, 2, 4, 2, 2, 4, 3, 3, 4, 1, 4, 4, 4, 3], [None, 1, 3, 1, 1, 1, 3, 4, 3, 4, 4, 1, 3, 4, 1, 2, 3, 3, 4, 2, 3], [None, 3, 2, 4, 1, 1, 1, 2, 3, 3, 1, 4, 3, 2, 2, 2, 3, 1, 1, 2, 1], [None, 3, 4, 4, 1, 3, 3, 2, 4, 1, 3, 1, 1, 1, 1, 3, 4, 4, 2, 3, 1], [None, 1, 4, 4, 4, 4, 4, 1, 1, 2, 1, 3, 1, 4, 1, 3, 2, 3, 4, 2, 3]], [None, [None, 1, 2, 4, 4, 3, 2, 4, 3, 2, 4, 4, 4, 4, 3, 3, 2, 4, 4, 2, 4], [None, 3, 1, 4, 2, 4, 4, 4, 2, 4, 4, 3, 2, 4, 4, 4, 3, 4, 4, 2, 3], [None, 4, 1, 4, 4, 3, 2, 4, 2, 3, 3, 2, 2, 3, 4, 2, 3, 4, 1, 4, 1], [None, 4, 3, 1, 4, 4, 3, 1, 2, 4, 4, 2, 1, 4, 3, 2, 4, 2, 2, 3, 1], [None, 4, 2, 3, 2, 4, 2, 4, 3, 2, 2, 4, 3, 2, 2, 2, 1, 4, 1, 1, 4], [None, 2, 1, 2, 3, 3, 4, 3, 2, 4, 4, 4, 4, 2, 1, 1, 4, 4, 1, 2, 1], [None, 2, 1, 2, 4, 4, 3, 2, 4, 2, 4, 4, 4, 4, 2, 1, 1, 3, 1, 2, 4], [None, 3, 4, 4, 4, 2, 3, 4, 4, 2, 3, 2, 4, 2, 4, 4, 1, 4, 1, 1, 4], [None, 1, 3, 3, 3, 4, 3, 4, 4, 2, 4, 4, 4, 1, 1, 1, 3, 2, 1, 3, 4], [None, 4, 4, 3, 3, 4, 3, 4, 4, 4, 2, 1, 4, 2, 1, 1, 1, 3, 4, 3, 1]], [None, [None, 4, 1, 2, 2, 3, 1, 4, 4, 3, 4, 4, 4, 3, 4, 3, 3, 3, 1, 3, 3], [None, 2, 1, 1, 4, 3, 4, 3, 3, 3, 4, 2, 4, 4, 4, 4, 4, 1, 4, 3, 3], [None, 1, 2, 2, 1, 2, 3, 2, 4, 3, 3, 3, 3, 3, 1, 1, 3, 1, 1, 2, 1], [None, 2, 1, 1, 2, 3, 2, 3, 4, 2, 2, 3, 4, 3, 2, 1, 3, 4, 1, 1, 1], [None, 4, 1, 1, 3, 3, 3, 1, 1, 4, 2, 2, 2, 4, 4, 2, 1, 4, 3, 3, 2], [None, 1, 2, 1, 2, 4, 4, 3, 3, 3, 3, 3, 4, 2, 1, 3, 3, 4, 1, 1, 4], [None, 2, 3, 3, 2, 1, 4, 1, 2, 3, 4, 3, 3, 3, 3, 4, 1, 1, 2, 1, 3], [None, 1, 1, 3, 4, 3, 3, 1, 3, 4, 4, 4, 4, 4, 1, 1, 2, 2, 1, 4, 3], [None, 3, 2, 1, 4, 4, 3, 1, 2, 4, 3, 3, 3, 2, 4, 4, 1, 4, 1, 2, 3], [None, 3, 1, 1, 1, 3, 4, 4, 2, 2, 3, 4, 3, 1, 1, 4, 3, 1, 1, 4, 1]], [None, [None, 4, 1, 3, 2, 3, 2, 2, 3, 3, 3, 4, 2, 4, 2, 2, 3, 2, 4, 4, 2], [None, 1, 2, 2, 3, 1, 2, 2, 2, 3, 2, 3, 4, 4, 2, 3, 4, 3, 2, 2, 4], [None, 1, 3, 2, 2, 1, 4, 3, 4, 2, 2, 2, 4, 4, 3, 4, 2, 2, 1, 3, 4], [None, 4, 2, 2, 3, 2, 3, 3, 1, 3, 2, 2, 2, 4, 4, 4, 3, 2, 3, 4, 4], [None, 3, 3, 1, 1, 4, 4, 3, 2, 2, 3, 3, 3, 4, 4, 4, 2, 2, 4, 4, 2], [None, 4, 2, 1, 2, 4, 2, 1, 2, 1, 2, 2, 4, 1, 4, 3, 1, 3, 4, 1, 1], [None, 3, 2, 1, 3, 4, 4, 2, 4, 4, 3, 4, 4, 4, 4, 4, 4, 1, 4, 1, 2], [None, 3, 1, 1, 3, 3, 3, 3, 4, 1, 4, 4, 4, 2, 4, 4, 2, 4, 4, 1, 2], [None, 2, 1, 1, 1, 4, 3, 2, 3, 3, 2, 2, 2, 1, 4, 3, 3, 2, 1, 4, 1], [None, 2, 3, 3, 4, 2, 3, 4, 1, 3, 4, 2, 4, 4, 2, 2, 4, 1, 1, 3, 1]], [None, [None, 4, 3, 3, 3, 3, 3, 3, 4, 4, 3, 3, 4, 4, 3, 3, 2, 3, 4, 2, 2], [None, 2, 4, 1, 4, 3, 1, 3, 3, 4, 3, 4, 4, 4, 4, 4, 3, 3, 4, 2, 4], [None, 4, 4, 2, 4, 1, 3, 3, 4, 4, 3, 3, 3, 4, 4, 3, 3, 3, 4, 3, 4], [None, 3, 3, 3, 3, 3, 4, 2, 4, 1, 4, 3, 3, 3, 4, 4, 4, 2, 1, 4, 4], [None, 4, 1, 3, 3, 4, 2, 4, 4, 3, 2, 4, 4, 3, 2, 4, 3, 3, 4, 4, 1], [None, 1, 3, 1, 2, 4, 4, 3, 3, 4, 4, 3, 3, 4, 2, 4, 3, 2, 1, 1, 1], [None, 1, 3, 3, 1, 4, 3, 3, 3, 3, 3, 2, 4, 4, 4, 4, 1, 1, 1, 1, 2], [None, 1, 3, 2, 3, 1, 3, 1, 3, 3, 4, 3, 4, 3, 4, 1, 4, 4, 1, 1, 1], [None, 1, 3, 4, 4, 3, 3, 3, 2, 4, 4, 4, 4, 4, 3, 1, 3, 1, 1, 1, 1], [None, 1, 1, 4, 4, 3, 4, 3, 4, 2, 2, 4, 4, 4, 4, 2, 4, 4, 4, 1, 1]], [None, [None, 2, 3, 1, 3, 4, 3, 3, 2, 4, 1, 2, 3, 4, 3, 3, 4, 4, 2, 2, 4], [None, 1, 3, 1, 1, 4, 2, 2, 4, 3, 3, 4, 3, 2, 4, 4, 3, 2, 3, 2, 2], [None, 2, 1, 3, 1, 3, 4, 3, 2, 1, 4, 3, 3, 3, 4, 4, 4, 3, 3, 3, 2], [None, 3, 1, 4, 3, 3, 2, 4, 4, 2, 2, 3, 4, 3, 4, 3, 2, 4, 3, 2, 4], [None, 3, 2, 4, 1, 1, 4, 3, 4, 2, 4, 3, 4, 4, 3, 4, 2, 4, 2, 2, 2], [None, 3, 1, 1, 2, 2, 4, 1, 3, 3, 4, 1, 3, 2, 1, 2, 2, 4, 4, 4, 2], [None, 4, 2, 1, 4, 1, 3, 3, 4, 2, 2, 3, 4, 4, 4, 4, 2, 4, 4, 1, 3], [None, 4, 2, 4, 3, 3, 4, 2, 4, 2, 2, 4, 4, 3, 1, 1, 3, 4, 3, 3, 2], [None, 1, 3, 4, 3, 3, 4, 3, 1, 4, 3, 3, 3, 3, 3, 4, 3, 3, 3, 3, 2], [None, 4, 3, 2, 2, 4, 2, 4, 2, 2, 4, 4, 3, 3, 4, 4, 2, 3, 2, 3, 2]]]
 
 
 
-
-if len(params) < 2:
-    if len(params) < 1:
-        params = [3,800]
-    else:
-        params.append(800)
 
 debug = False
 debugStrategy=False
 debugMove = False
 debugCalStrategy=True
+debugGrid = True
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
+SLIME,WALL,EMPTY,DEPOT,HARVESTER = 's','W','.','d','H'
 
 class CalibrationStrategyRatio:
 
@@ -47,6 +42,7 @@ class CalibrationStrategyRatio:
 
     def autoParam(self):
 
+        '''
         if self.N < len(bestParams) and bestParams[self.N] is not None:
             if self.D < len(bestParams[self.N]) and bestParams[self.N][self.D] is not None:
                 if self.H < len(bestParams[self.N][self.D]) and bestParams[self.N][self.D][self.H] is not None:
@@ -54,6 +50,7 @@ class CalibrationStrategyRatio:
                     if debugCalStrategy:
                         eprint('Found auto param', self.PARAM_DIV)
 
+        '''
         if debugCalStrategy:
             eprint('Auto param', self.PARAM_DIV)
 
@@ -89,13 +86,13 @@ class CalibrationStrategyRatio:
         ratio = curNumSlimes/self.H
         if ratio <= 2:
             self.applcableCapacity = min(1,self.C)
-        elif ratio > 2:
+        elif ratio <= 3:
             self.applcableCapacity = min(2,self.C)
-        elif ratio > 3:
+        elif ratio <= 4:
             self.applcableCapacity = min(3,self.C)
-        elif ratio > 4:
+        elif ratio <= 5:
             self.applcableCapacity = min(4,self.C)
-        elif ratio > 5:
+        elif ratio <= 6:
             self.applcableCapacity = min(5,self.C)
         else:
             self.applcableCapacity = self.C
@@ -130,12 +127,14 @@ class CalibrationStrategy:
 
     def autoParam(self):
 
+        '''
         if self.N < len(bestParams) and bestParams[self.N] is not None:
             if self.D < len(bestParams[self.N]) and bestParams[self.N][self.D] is not None:
                 if self.H < len(bestParams[self.N][self.D]) and bestParams[self.N][self.D][self.H] is not None:
                     self.PARAM_DIV = bestParams[self.N][self.D][self.H] 
                     if debugCalStrategy:
                         eprint('Found auto param', self.PARAM_DIV)
+        '''
 
         if debugCalStrategy:
             eprint('Auto param', self.PARAM_DIV)
@@ -211,7 +210,7 @@ class BioSlime:
         self.slimeId = dict()
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
-        self.calStrategy = CalibrationStrategyRatio(self.N,self.C,self.H,params[0],params[1])
+        self.calStrategy = CalibrationStrategyRatio(self.N,self.C,self.H,3,800)
 
     def setup(self):
         # Read the location of each harvester
@@ -537,7 +536,7 @@ class BioSlime:
         return subgrids
 
 
-    def isNeighborBusy(self, h, moves, limit=3):
+    def isNeighborBusy(self, h, moves, limit=2):
         begr,begc = self.har[h]
 
         for h2 in range(self.H):
@@ -912,23 +911,285 @@ class BioSlime:
 
 class AutoTester:
 
-    def __init__(self,N,C,H):
+    def __init__(self,N,D,H,W,C,S,P):
         self.N = N
-        self.C = C
+        self.D = D
         self.H = H
+        self.wallP = int(W*10)
+        self.C = C
+        self.slimeP = int(S*10)
+        self.P = P
+        self.dc = [1,0,-1,0]
+        self.dr = [0,1,0,-1]
+
+        self.grid = None
+        self.carry = [0]*H 
+        self.entityC = [0]*H 
+        self.entityR = [0]*H 
+        self.depot = defaultdict(int)
+        if debugGrid:
+            eprint('AutoTester N=',self.N,'slimeP',self.slimeP,'wallP',self.wallP)
+
+        while True:
+            self.grid = [['.' for x in range(self.N)] for y in range(self.N)]
+            emptyCells = N*N
+            self.carry = [0]*H 
+            self.entityC = [0]*H 
+            self.entityR = [0]*H 
+            locDepots = [0]*D
+            numSlime = 0;
+            numHarvesters = 0;
+            numDepots = 0;
+            if debugGrid:
+                eprint('Try random')
+
+            def calcReachable():
+
+                reachable = 0
+                stack = []
+                for r in range(self.N):
+                    for c in range(self.N):
+                        if self.grid[r][c] != WALL and self.grid[r][c] != DEPOT:
+                            stack.append((r,c))
+                            break
+                    if stack:
+                        break
+
+                explored = [[False]*N for y in range(self.N)]
+                explored[stack[0][0]][stack[0][1]] = True
+                # run dfs
+                while stack:
+                    r,c = stack.pop()
+                    reachable += 1
+                    for d in range(4):
+                        nr = r+self.dr[d]
+                        nc = c+self.dc[d]
+                        if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]==WALL or self.grid[nr][nc] == DEPOT:
+                            continue
+                        if explored[nr][nc]:
+                            continue
+                        explored[nr][nc] = True
+                        stack.append((nr,nc))
+                return reachable
+
+
+
+            assert(calcReachable() == emptyCells)
+            # place slime and walls
+            for i in range(N):
+                for k in range(N):
+                    p = random.randint(0,9)
+                    if p<self.slimeP:
+                        self.grid[i][k] = SLIME
+                        numSlime+=1
+                    elif p<self.slimeP+self.wallP:
+                        
+                        self.grid[i][k] = WALL
+                        emptyCells-=1
+                        if calcReachable() != emptyCells:
+                            self.grid[i][k] = EMPTY
+                            emptyCells+=1
+                            if debugGrid:
+                                eprint('Cannot place wall');
+                            continue
+                    else:
+                        self.grid[i][k] = EMPTY
+
+            assert(calcReachable() == emptyCells)
+            explored = [[False]*N for y in range(self.N)]
+            for r in range(N):
+                for c in range(N):
+                    if self.grid[r][c] == SLIME:
+                        explored[r][c] = True
+                        for nr,nc in [(r-1,c-1),(r-1,c),(r+1,c),(r+1,c+1),(r,c+1),(r,c-1)]:
+                            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]==WALL:
+                                continue
+                            explored[nr][nc] = True
+                    elif self.grid[r][c] == WALL:
+                        explored[r][c] = True
+            
+            assert(calcReachable() == emptyCells)
+            available = [(r,c) for r in range(self.N) for c in range(self.N) if not explored[r][c]]            
+            for i in range(D):
+
+                if not available:
+                    break
+                
+                while True:
+                    tgt = random.randint(0,len(available)-1)
+                    r,c = available[tgt]
+                    old = self.grid[r][c]
+                    self.grid[r][c] = DEPOT;
+                    emptyCells-=1
+                    del available[tgt]
+                    if calcReachable() != emptyCells:
+                        self.grid[r][c] = old
+                        emptyCells+=1
+                        eprint('Cannot place depot',len(available),calcReachable(),emptyCells);
+                        continue
+                    break
+                
+                locDepots[numDepots] = r*N+c;
+                numDepots+=1
+
+            if not available:
+                if debugGrid:
+                    eprint('No available space')
+                continue
+
+            # Make sure everything is reachable by harvesters
+            reachable = calcReachable()
+            if reachable != emptyCells:
+                if debugGrid:
+                    eprint('Not reachable')
+                continue # retry
+
+            # place harvesters
+            for i in range(H):
+                r = random.randint(0, N-1);
+                c = random.randint(0, N-1);
+                while self.grid[r][c]!=EMPTY:
+                    r = random.randint(0, N-1);
+                    c = random.randint(0, N-1);
+                    
+                self.grid[r][c] = HARVESTER;
+                self.carry[numHarvesters] = 0;
+                self.entityC[numHarvesters] = c;
+                self.entityR[numHarvesters] = r;
+                numHarvesters+=1
+            if reachable==emptyCells and numDepots>0 and numSlime>0 and numHarvesters>0:
+
+                self.numStartDepots = numDepots;
+                break;
+
+        if debugGrid:
+            eprint('Tester ready')
+            eprint(self.grid)
 
     def setupHarvester(self):
         har = [(0,0)]*self.H
+        for h in range(self.H):
+            har[h] = [self.entityR[h],self.entityC[h]]
         return har
         
     def parseGrid(self,grid):
-        pass
+        for r in range(self.N):
+            grid[r] = self.grid[r][:]
+        
 
     def parseLoad(self):
-        return [0]*H
+        return self.carry[:]
 
     def pushCmd(self,cmd):
-        pass
+        assert(len(cmd) == self.H*2)
+        if debug:
+            cmdstr = ' '.join(cmd)
+            #sys.stderr.write(cmdstr)
+            eprint(cmdstr)
+
+        cmd2 = cmd[:]
+        while cmd2:
+            move = cmd2.pop()
+            h = int(cmd2.pop())
+
+            if 'X' == move:
+                continue # no action
+
+            if 'U' == move:
+                r = self.entityR[h]
+                c = self.entityC[h]
+                assert(r > 0)
+                assert(self.grid[r][c] == HARVESTER)
+
+                if self.grid[r-1][c] == SLIME:
+                    self.carry[h] += 1
+                    assert(self.carry[h] <= self.C)
+                elif self.grid[r-1][c] == DEPOT:
+                    self.depot[(r,c)] += 1
+                    continue
+
+                self.grid[r][c] = EMPTY
+                r-=1                
+                self.entityR[h] = r
+                assert(self.grid[r][c] == EMPTY or self.grid[r][c] == SLIME)
+
+                self.grid[r][c] = HARVESTER
+                
+            if 'D' == move:
+                r = self.entityR[h]
+                c = self.entityC[h]
+                assert(r < (self.N-1))
+                assert(self.grid[r][c] == HARVESTER)
+
+
+                if self.grid[r+1][c] == SLIME:
+                    self.carry[h] += 1
+                    assert(self.carry[h] <= self.C)
+                elif self.grid[r+1][c] == DEPOT:
+                    self.depot[(r,c)] += 1
+                    continue
+
+                self.grid[r][c] = EMPTY
+                r+=1
+                self.entityR[h] = r
+                assert(self.grid[r][c] == EMPTY or self.grid[r][c] == SLIME)
+                self.grid[r][c] = HARVESTER
+
+            if 'L' == move:
+                r = self.entityR[h]
+                c = self.entityC[h]
+                assert(c > 0)
+                assert(self.grid[r][c] == HARVESTER)
+
+                if self.grid[r][c-1] == SLIME:
+                    self.carry[h] += 1
+                    assert(self.carry[h] <= self.C)
+                elif self.grid[r][c-1] == DEPOT:
+                    self.depot[(r,c)] += 1
+                    continue
+
+                self.grid[r][c] = EMPTY
+                c-=1
+                self.entityC[h] = c
+                assert(self.grid[r][c] == EMPTY or self.grid[r][c] == SLIME)
+                self.grid[r][c] = HARVESTER
+ 
+ 
+            if 'R' == move:
+                r = self.entityR[h]
+                c = self.entityC[h]
+                assert(c < (self.N-1))
+                assert(self.grid[r][c] == HARVESTER)
+
+
+                if self.grid[r][c+1] == SLIME:
+                    self.carry[h] += 1
+                    assert(self.carry[h] <= self.C)
+                elif self.grid[r][c+1] == DEPOT:
+                    self.depot[(r,c)] += 1
+                    continue
+
+                self.grid[r][c] = EMPTY
+                c+=1
+                self.entityC[h] = c
+                assert(self.grid[r][c] == EMPTY or self.grid[r][c] == SLIME)
+                self.grid[r][c] = HARVESTER
+ 
+
+
+        #if debugGrid:
+        #    eprint(self.grid)
+
+    def calcScore(self):
+        score = self.N*self.N
+        for r in range(self.N):
+            for c in range(self.N):
+                if SLIME == self.grid[r][c]:
+                    score -= 1
+        for d in self.depot.values():
+            score += d
+        
+        return score
 
 class StdTester:
     def __init__(self):
@@ -968,29 +1229,40 @@ class StdTester:
         if debug:
             #sys.stderr.write(cmdstr)
             eprint(cmdstr)
-        #time.sleep(1/10)
-        # Output the command for the turn
-        #print(cmdstr,flush=False)
-        #print(cmdstr)
-        #print(cmdstr,flush=True,end='')
-        #print(cmdstr,end='')
-        #sys.stdout.write(cmdstr)
         print(cmdstr)
         sys.stdout.flush()
-        #print()
-        #sys.stdout.flush()
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Test BioSlime')
+    parser.add_argument('-N', '--ngrid', type=int, default=10, help='Grid size')
+    parser.add_argument('-D', '--depot', type=int, default=1, help='Number of depots')
+    parser.add_argument('-H', '--harvester', type=int, default=1, help='Number of Harvester')
+    parser.add_argument('-W', '--wall', type=float, default=0.1, help='Wall probability')
+    parser.add_argument('-C', '--capacity', type=int, default=1, help='Number of slimes the harvester can carry')
+    parser.add_argument('-S', '--slimeS', type=float, default=0.1, help='Slime probability')
+    parser.add_argument('-P', '--slimeP', type=float, default=0.1, help='Slime probability')
+    parser.add_argument('-A', '--autotest', action='store_true', help='Run autotest')
 
-    #tester = AutoTester() # or StdTester
-    tester = StdTester()
-    bsalg = BioSlime(tester)
-    bsalg.setup()
+    args = parser.parse_args()
+    if args.autotest:
+        tester = AutoTester(args.ngrid,args.depot,args.harvester,args.wall,args.capacity,args.slimeS,args.slimeP) # or StdTester
+        bsalg = BioSlime(tester)
+        bsalg.setup()
 
-    # Simulate 1000 turns
-    for turn in range(1000):
-        bsalg.run(turn)
+        # Simulate 1000 turns
+        for turn in range(1000):
+            bsalg.run(turn)
+
+        print('Score',tester.calcScore())
+    else:
+        tester = StdTester()
+        bsalg = BioSlime(tester)
+        bsalg.setup()
+
+        # Simulate 1000 turns
+        for turn in range(1000):
+            bsalg.run(turn)
 
 
 
