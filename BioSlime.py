@@ -25,6 +25,89 @@ debugCalStrategy=True
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+class CalibrationStrategyRatio:
+
+    def __init__(self, N, C, H, PARAM_DIV, PARAM_CLEANUP_TURN):
+        self.N = N
+        self.C = C
+        self.H = H
+        self.PARAM_DIV = PARAM_DIV
+        self.PARAM_CLEANUP_TURN = PARAM_CLEANUP_TURN
+
+
+        # calibration logic
+        self.prevScore = 0
+        self.prevNumSlimes = 0
+        self.applcableCapacity = min(2,self.C)
+
+    def setupDepot(self,depotbad,depotscore):
+        self.depotbad = depotbad
+        self.depotscore = depotscore
+        self.D = len(self.depotbad)
+
+    def autoParam(self):
+
+        if self.N < len(bestParams) and bestParams[self.N] is not None:
+            if self.D < len(bestParams[self.N]) and bestParams[self.N][self.D] is not None:
+                if self.H < len(bestParams[self.N][self.D]) and bestParams[self.N][self.D][self.H] is not None:
+                    self.PARAM_DIV = bestParams[self.N][self.D][self.H] 
+                    if debugCalStrategy:
+                        eprint('Found auto param', self.PARAM_DIV)
+
+        if debugCalStrategy:
+            eprint('Auto param', self.PARAM_DIV)
+
+
+    def calculateScore(self, numSlimes):
+        
+        totalScore = self.N*self.N
+        totalScore -= numSlimes
+        for d in range(self.D):
+            if self.depotbad[d]:
+                continue
+            totalScore += self.depotscore[d]
+        return totalScore
+
+    def calculateApplicableCapacity(self, turn, slimes):
+
+        curNumSlimes = len(slimes)
+
+        if 0 == turn:
+            self.prevScore = self.calculateScore(curNumSlimes)
+            self.prevNumSlimes = len(slimes)
+            return self.applcableCapacity
+
+        if turn >= self.PARAM_CLEANUP_TURN: # At the end use highest capacity
+            self.applcableCapacity = self.C
+            return self.applcableCapacity
+
+        if (turn % 40) != 0:
+            return self.applcableCapacity
+
+        curScore = self.calculateScore(curNumSlimes)
+
+        ratio = curNumSlimes/self.H
+        if ratio <= 2:
+            self.applcableCapacity = min(1,self.C)
+        elif ratio > 2:
+            self.applcableCapacity = min(2,self.C)
+        elif ratio > 3:
+            self.applcableCapacity = min(3,self.C)
+        elif ratio > 4:
+            self.applcableCapacity = min(4,self.C)
+        elif ratio > 5:
+            self.applcableCapacity = min(5,self.C)
+        else:
+            self.applcableCapacity = self.C
+
+
+        self.prevScore = curScore
+        self.prevNumSlimes = len(slimes)
+
+        if debugCalStrategy:
+            eprint(turn, 'Applicable capacity', self.applcableCapacity)
+        return self.applcableCapacity
+ 
 class CalibrationStrategy:
 
     def __init__(self, N, C, H, PARAM_DIV, PARAM_CLEANUP_TURN):
@@ -128,7 +211,7 @@ class BioSlime:
         self.slimeId = dict()
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
-        self.calStrategy = CalibrationStrategy(self.N,self.C,self.H,params[0],params[1])
+        self.calStrategy = CalibrationStrategyRatio(self.N,self.C,self.H,params[0],params[1])
 
     def setup(self):
         # Read the location of each harvester
