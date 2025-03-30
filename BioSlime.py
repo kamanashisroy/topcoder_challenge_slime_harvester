@@ -810,7 +810,7 @@ class BioSlime:
             freeMoves.append((nr,nc))
 
         if 1 == len(freeMoves):
-            ret = self.moveToNearestDepot(self,h,explored,capacity,depotbusy)
+            ret = self.moveToNearestDepot(h,explored,capacity,depotbusy)
             if ret is None:
                 explored.add(freeMoves[-1])
                 return freeMoves[-1]
