@@ -611,7 +611,7 @@ class BioSlime:
         return subgrids
 
 
-    def isNeighborBusy(self, h, moves, limit=3):
+    def isNeighborBusy(self, h, moves, limit=2):
         begr,begc = self.har[h]
 
         for h2 in range(self.H):
