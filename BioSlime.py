@@ -779,25 +779,31 @@ class BioSlime:
 
         return None
 
-    def moveAwayFromSlimeWhenSurrounded(self,h,explored, capacity, depotbusy):
+    def moveAwayFromSlimeWhenSurrounded(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
+        if myload <= 3:
+            return None
 
         freeMoves = []
         for d in range(4):
             nr = r + self.dr[d]
             nc = c + self.dc[d]
-            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W' or self.grid[nr][nc] == 'S':
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]==WALL or self.grid[nr][nc] == SLIME:
+                continue
+            if (nr,c) in explored:
                 continue
             freeMoves.append((nr,nc))
 
-        if 1 == len(freeMoves):
+        #if debugStrategy:
+        #    eprint(h, r, c, 'moveAwayFromSlimeWhenSurrounded freeMoves', freeMoves)
+        if len(freeMoves) <= 1:
             if debugStrategy:
                 eprint(h, r, c, 'moveAwayFromSlimeWhenSurrounded is stuck')
-            ret = self.moveToNearestDepot(h,explored,capacity,depotbusy)
-            if ret is None:
-                explored.add(freeMoves[-1])
-                nr,nc = freeMoves[-1]
-                return self.calcDir(nr,nc,r,c)
+            ret = self.moveToNearestDepot(h,explored,myload,depotbusy)
+            #if ret is None and freeMoves:
+            #    explored.add(freeMoves[-1])
+            #    nr,nc = freeMoves[-1]
+            #    return self.calcDir(nr,nc,r,c)
             return ret
         return None
 
