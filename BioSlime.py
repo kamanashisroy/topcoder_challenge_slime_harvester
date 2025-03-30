@@ -813,7 +813,8 @@ class BioSlime:
             ret = self.moveToNearestDepot(h,explored,capacity,depotbusy)
             if ret is None:
                 explored.add(freeMoves[-1])
-                return freeMoves[-1]
+                nr,nc = freeMoves[-1]
+                return self.calcDir(nr,nc,r,c)
         return None
 
     def wander(self, h, explored, myload, depotbusy):
