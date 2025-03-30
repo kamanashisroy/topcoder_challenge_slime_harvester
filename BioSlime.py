@@ -53,7 +53,7 @@ class Config:
                             eprint('Adjusted auto param MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT)
 
         if debugCalStrategy:
-            eprint('CalibrationStrategyRatio:Cleanup turn', self.PARAM_CLEANUP_TURN)
+            eprint('CalibrationStrategy:Cleanup turn', self.PARAM_CLEANUP_TURN)
             eprint('OPTIMIZE', self.OPTIMIZE)
             eprint('PAIR_HARVESTER', self.PAIR_HARVESTER)
 
@@ -146,7 +146,6 @@ class CalibrationStrategy:
         self.harvesterStuck = harvesterStuck
         self.applcableCapacity = min(2,cfg.C)
 
-
     def calculateScore(self, numSlimes):
         
         totalScore = self.cfg.N*self.cfg.N
@@ -160,7 +159,7 @@ class CalibrationStrategy:
         if 0 == turn:
             self.prevScore = self.calculateScore(curNumSlimes)
             self.prevNumSlimes = curNumSlimes
-            return self.applcableCapacity
+            #return self.applcableCapacity
 
         curScore = self.calculateScore(curNumSlimes)
 
@@ -190,6 +189,13 @@ class CalibrationStrategy:
             if (curNumSlimes-self.prevNumSlimes) >= (self.prevNumSlimes/self.cfg.PARAM_DIV):
                 self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
 
+        '''
+        ratio = curNumSlimes/self.cfg.H
+        if ratio > 8:
+            if debugCalStrategy:
+                eprint(turn, 'Using ratio', ratio)
+            self.applcableCapacity = min(self.cfg.C, int(ratio))
+        '''
 
         self.prevScore = curScore
         self.prevNumSlimes = curNumSlimes
