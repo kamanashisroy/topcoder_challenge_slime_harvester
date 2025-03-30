@@ -506,7 +506,7 @@ class BioSlime:
         dr,dc = self.depots[depotidx]
 
         tr,tc = dr,dc
-        
+
         for h2,(r2,c2) in enumerate(self.har):
             if h2 != h:
                 if (self.manhatdist(begr,begc,r2,c2)+self.manhatdist(tr,tc,r2,c2)) < (self.manhatdist(begr,begc,dr,dc)+self.manhatdist(tr,tc,dr,dc)):
@@ -521,11 +521,11 @@ class BioSlime:
 
         MAXGRID,unused = self.calcSubGrid(self.N,self.N)[0]
         grids = [(0,self.calcSubGrid(begr,begc)[0])]
-        explored = set()
+        exp = set()
         prevdist = 0
         while grids:
             curdist,(subgr,subgc) = heappop(grids)
-            explored.add( (subgr,subgc) )
+            exp.add( (subgr,subgc) )
             if curdist > prevdist and hp:
                 break # early exit
             prevdist = curdist
@@ -535,11 +535,11 @@ class BioSlime:
                     hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),idx))
             
             for subgr2,subgc2 in [(subgr,subgc-1),(subgr-1,subgc-1),(subgr-1,subgc),(subgr-1,subgc+1),(subgr,subgc+1),(subgr+1,subgc+1),(subgr+1,subgc),(subgr+1,subgc-1)]:
-                if (subgr2,subgc2) in explored:
+                if (subgr2,subgc2) in exp:
                     continue
                 if subgr2 < 0 or subgc2 < 0 or subgr2 > MAXGRID or subgc2 > MAXGRID:
                     continue
-                explored.add( (subgr2,subgc2) )
+                exp.add( (subgr2,subgc2) )
                 heappush(grids, (curdist+1,(subgr2,subgc2)) )
             
         
@@ -798,6 +798,23 @@ class BioSlime:
 
         return None
 
+    def moveAwayFromSlimeWhenSurrounded(self,h,explored, capacity, depotbusy):
+        r,c = self.har[h]
+
+        freeMoves = []
+        for d in range(4):
+            nr = r + self.dr[d]
+            nc = c + self.dc[d]
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W' or self.grid[nr][nc] == 'S':
+                continue
+            freeMoves.append((nr,nc))
+
+        if 1 == len(freeMoves):
+            ret = self.moveToNearestDepot(self,h,explored,capacity,depotbusy)
+            if ret is None:
+                explored.add(freeMoves[-1])
+                return freeMoves[-1]
+        return None
 
     def wander(self, h, explored, myload, depotbusy):
         r,c = self.har[h]
@@ -921,6 +938,10 @@ class BioSlime:
             self.sendMoves(moveCmds)
             return
             
+        for h,(r,c) in enumerate(self.har):
+            if moveCmds[h] is not None:
+                continue
+            moveCmds[h] = self.moveAwayFromSlimeWhenSurrounded(h,explored,self.load[h],depotbusy) 
 
         for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
