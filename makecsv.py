@@ -20,7 +20,7 @@ def parseFile(filename):
         if key not in table:
             table[key] = []
 
-        table[key].append([(m.group('harvesterPerDepot'),m.group('maxAllowedCapacity')),scores])
+        table[key].append([(int(m.group('harvesterPerDepot')),int(m.group('maxAllowedCapacity'))),scores])
     
 
 folder_path = '.'
