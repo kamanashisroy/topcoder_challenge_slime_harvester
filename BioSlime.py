@@ -25,7 +25,6 @@ SLIME,WALL,EMPTY,DEPOT,HARVESTER = 's','W','.','d','H'
 class Config:
     def __init__(self):
 
-        self.MAXIMUM_ALLOWED_CAPACITY=14
         self.MIN_HARVESTOR_PER_DEPOT=4
         self.PARAM_DIV = 3
         self.PARAM_CLEANUP_TURN = 800
@@ -40,15 +39,15 @@ class Config:
         self.C = C
 
         if debugCalStrategy:
-            eprint('Begin MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT, 'MAXIMUM_ALLOWED_CAPACITY',self.MAXIMUM_ALLOWED_CAPACITY)
+            eprint('Begin MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT)
 
         if self.AUTOCFG:
             if self.N < len(bestParams) and bestParams[self.N] is not None:
                 if self.D < len(bestParams[self.N]) and bestParams[self.N][self.D] is not None:
                     if self.H < len(bestParams[self.N][self.D]) and bestParams[self.N][self.D][self.H] is not None:
-                        self.MIN_HARVESTOR_PER_DEPOT,self.MAXIMUM_ALLOWED_CAPACITY = bestParams[self.N][self.D][self.H] 
+                        self.MIN_HARVESTOR_PER_DEPOT = bestParams[self.N][self.D][self.H] 
                         if debugCalStrategy:
-                            eprint('Adjusted auto param MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT, 'MAXIMUM_ALLOWED_CAPACITY',self.MAXIMUM_ALLOWED_CAPACITY)
+                            eprint('Adjusted auto param MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT)
 
         if debugCalStrategy:
             eprint('CalibrationStrategyRatio:Cleanup turn', self.PARAM_CLEANUP_TURN)
@@ -97,7 +96,6 @@ class CalibrationStrategyRatio:
 
 
         if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
-            self.applcableCapacity = min(self.cfg.MAXIMUM_ALLOWED_CAPACITY, self.cfg.C)
             self.applcableCapacity = self.cfg.C
             if debugCalStrategy and (turn % 40) == 0:
                 eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
@@ -116,9 +114,9 @@ class CalibrationStrategyRatio:
 
         if activeharvesters:
             ratio = curNumSlimes/activeharvesters
-            self.applcableCapacity = min(self.cfg.MAXIMUM_ALLOWED_CAPACITY,  min(max(0,int(ratio-1)),self.cfg.C) )
+            self.applcableCapacity = min(max(0,int(ratio-1)),self.cfg.C)
         else:
-            self.applcableCapacity = min(self.cfg.MAXIMUM_ALLOWED_CAPACITY, self.cfg.C)
+            self.applcableCapacity = self.cfg.C
 
 
         self.prevScore = curScore
@@ -1340,7 +1338,6 @@ if __name__ == "__main__":
     parser.add_argument('-P', '--slimeP', type=float, default=0.1, help='Slime probability')
     parser.add_argument('-A', '--autotest', action='store_true', help='Run autotest')
     parser.add_argument('-T', '--tune', action='store_true', help='Try to tune parameter')
-    parser.add_argument('-K', '--maxAllowedCapacity', type=int, default=cfg.MAXIMUM_ALLOWED_CAPACITY, help='Maximum capacity that is applicable')
     parser.add_argument('-M', '--harvesterPerDepot', type=int, default=cfg.MIN_HARVESTOR_PER_DEPOT, help='Maximum harvester per depot')
     parser.add_argument('-O', '--optimize', action='store_true', default=cfg.OPTIMIZE, help='Make it run faster')
     parser.add_argument('-G', '--noautocfg', action='store_true', default=(not cfg.AUTOCFG), help='Do not read config value from params')
@@ -1366,7 +1363,6 @@ if __name__ == "__main__":
                     result[N][D][H] = []
                     for maxAllowedCapacity in range(4,16):
                         for harvesterPerDepot in range(4,16):
-                            cfg.MAXIMUM_ALLOWED_CAPACITY = maxAllowedCapacity
                             cfg.MIN_HARVESTOR_PER_DEPOT = harvesterPerDepot
 
                             tester = copy.deepcopy(prototester)
@@ -1386,7 +1382,6 @@ if __name__ == "__main__":
         print(result)
 
     elif args.autotest:
-        cfg.MAXIMUM_ALLOWED_CAPACITY = args.maxAllowedCapacity
         cfg.MIN_HARVESTOR_PER_DEPOT = args.harvesterPerDepot
         # python3 BioSlime.py -N 30 -C 20 -D 8 -H 10 -S 0.5 -P 0.1 -W 0.1 -A
         tester = AutoTester(args.ngrid,args.depot,args.harvester,args.wall,args.capacity,args.slimeS,args.slimeP) 
@@ -1399,7 +1394,6 @@ if __name__ == "__main__":
 
         print('Score',tester.calcScore())
     else:
-        cfg.MAXIMUM_ALLOWED_CAPACITY = args.maxAllowedCapacity
         cfg.MIN_HARVESTOR_PER_DEPOT = args.harvesterPerDepot
 
         tester = StdTester()

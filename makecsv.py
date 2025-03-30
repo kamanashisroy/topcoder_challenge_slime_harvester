@@ -2,7 +2,7 @@ import os
 import re
 
 # N_15_D_3_H_8_7_13
-pat = r'..N_(?P<N>\d*)_D_(?P<D>\d*)_H_(?P<H>\d*)_(?P<harvesterPerDepot>\d)_(?P<maxAllowedCapacity>\d)'
+pat = r'..N_(?P<N>\d*)_D_(?P<D>\d*)_H_(?P<H>\d*)_(?P<harvesterPerDepot>\d)'
 p = re.compile(pat)
 table = dict()
 def parseFile(filename):
@@ -20,7 +20,7 @@ def parseFile(filename):
         if key not in table:
             table[key] = []
 
-        table[key].append([(int(m.group('harvesterPerDepot')),int(m.group('maxAllowedCapacity'))),scores])
+        table[key].append([int(m.group('harvesterPerDepot')),scores])
     
 
 folder_path = '.'
