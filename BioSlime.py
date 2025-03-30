@@ -1,4 +1,5 @@
 
+import copy
 import random
 import argparse
 import time
@@ -19,6 +20,8 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 SLIME,WALL,EMPTY,DEPOT,HARVESTER = 's','W','.','d','H'
+MAXIMUM_ALLOWED_CAPACITY=14
+MIN_HARVESTOR_PER_DEPOT=4
 
 class CalibrationStrategyRatio:
 
@@ -39,6 +42,9 @@ class CalibrationStrategyRatio:
         self.depotbad = depotbad
         self.depotscore = depotscore
         self.D = len(self.depotbad)
+
+    def setupHarvester(self, harvesterStuck):
+        self.harvesterStuck = harvesterStuck
 
     def autoParam(self):
 
@@ -70,24 +76,43 @@ class CalibrationStrategyRatio:
             self.prevNumSlimes = curNumSlimes
             return self.applcableCapacity
 
+        curScore = self.calculateScore(curNumSlimes)
+
+        numharvesterStuck = 0
+        for x in self.harvesterStuck:
+            if x:
+                numharvesterStuck += 1
+
+
         if turn >= self.PARAM_CLEANUP_TURN: # At the end use highest capacity
-            self.applcableCapacity = self.C
+            self.applcableCapacity = min(MAXIMUM_ALLOWED_CAPACITY, self.C)
+            if debugCalStrategy and (turn % 40) == 0:
+                eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
             return self.applcableCapacity
 
         if (turn % 40) != 0:
             return self.applcableCapacity
 
-        curScore = self.calculateScore(curNumSlimes)
+        numharvesterStuck = 0
+        for x in self.harvesterStuck:
+            if x:
+                numharvesterStuck += 1
 
-        ratio = curNumSlimes/self.H
-        self.applcableCapacity = min(max(0,int(ratio-1)),self.C)
+        #activeharvesters = self.H-numharvesterStuck
+        activeharvesters = self.H
+
+        if activeharvesters:
+            ratio = curNumSlimes/activeharvesters
+            self.applcableCapacity = min(MAXIMUM_ALLOWED_CAPACITY,  min(max(0,int(ratio-1)),self.C) )
+        else:
+            self.applcableCapacity = min(MAXIMUM_ALLOWED_CAPACITY, self.C)
 
 
         self.prevScore = curScore
         self.prevNumSlimes = curNumSlimes
 
         if debugCalStrategy:
-            eprint(turn, 'Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore)
+            eprint(turn, 'Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
         return self.applcableCapacity
  
 class CalibrationStrategy:
@@ -109,6 +134,9 @@ class CalibrationStrategy:
         self.depotbad = depotbad
         self.depotscore = depotscore
         self.D = len(self.depotbad)
+
+    def setupHarvester(self, harvesterStuck):
+        self.harvesterStuck = harvesterStuck
 
     def autoParam(self):
 
@@ -192,6 +220,7 @@ class BioSlime:
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
         self.calStrategy = CalibrationStrategyRatio(self.N,self.C,self.H,3,800)
+        self.harvesterStuck = [False]*self.H
 
     def setup(self):
         # Read the location of each harvester
@@ -211,6 +240,7 @@ class BioSlime:
         self.depotbad = [False]*self.D
         self.depotscore = [0]*self.D
         self.calStrategy.setupDepot(self.depotbad,self.depotscore)
+        self.calStrategy.setupHarvester(self.harvesterStuck)
 
         self.calStrategy.autoParam()
 
@@ -232,8 +262,8 @@ class BioSlime:
         if numDepots <= 0:
             return
         harPerDepot = (self.H//numDepots)+1
-        if harPerDepot < 4:
-            harPerDepot = 4 # try to keep harvestors concentrated
+        if harPerDepot < MIN_HARVESTOR_PER_DEPOT:
+            harPerDepot = MIN_HARVESTOR_PER_DEPOT # try to keep harvesters concentrated
         for i,(r,c) in enumerate(self.depots):
             if not self.depotbad[i]:
                 dist = self.shortestPathFromDepot[i][0]
@@ -245,7 +275,7 @@ class BioSlime:
                     if (hr,hc) in dist:
                         hp.append((dist[(hr,hc)],h))
                 heapify(hp)
-                if len(hp) < (harPerDepot+harPerDepot>>1):
+                if len(hp) < (harPerDepot+ (harPerDepot>>1)):
                     harPerDepot = len(hp)
                 numHar = 0
                 while hp and numHar < harPerDepot:
@@ -436,7 +466,22 @@ class BioSlime:
 
         if depotidx is not None:
             dr,dc = self.depots[depotidx]
-            return self.shortestPathAB(begr,begc,dr,dc,limit,explored,myload)
+            ret = self.shortestPathAB(begr,begc,dr,dc,limit,explored,myload)
+            ''' Switching affinity is not good
+            if ret is None:
+                for otherdepotidx,(dr,dc) in enumerate(self.depots):
+                    if self.depotbad[otherdepotidx]:
+                        continue
+                    ret = self.shortestPathAB(begr,begc,dr,dc,limit,explored,myload)
+                    if ret is not None:
+                        self.depotAffinity[h] = otherdepotidx
+                        break
+            '''
+            if ret is None:
+                self.harvesterStuck[h] = True
+            else:
+                self.harvesterStuck[h] = False
+            return ret
         return None
 
 
@@ -458,8 +503,31 @@ class BioSlime:
         
 
         hp = []
+        '''
         for i,(sr,sc) in enumerate(self.slimes):
             hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),i))
+        '''
+
+        grids = [(0,self.calcSubGrid(begr,begc)[0])]
+        explored = set()
+        prevdist = 0
+        while grids:
+            curdist,(subgr,subgc) = heappop(grids)
+            explored.add( (subgr,subgc) )
+            if curdist > prevdist and hp:
+                break # early exit
+            prevdist = curdist
+            if (subgr,subgc) in self.slimeSubGrids:
+                for idx in self.slimeSubGrids[(subgr,subgc)]:
+                    sr,sc = self.slimes[idx]
+                    hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),idx))
+            
+            for subgr2,subgc2 in [(subgr-1,subgc),(subgr-1,subgc-1),(subgr,subgc-1),(subgr+1,subgc+1),(subgr,subgc+1),(subgr+1,subgc-1),(subgr-1,subgc+1)]        :
+                if (subgr2,subgc2) in explored:
+                    continue
+                explored.add( (subgr2,subgc2) )
+                heappush(grids, (curdist+1,(subgr2,subgc2)) )
+            
         
         if hp:
             unused,idx = min(hp)
@@ -508,7 +576,7 @@ class BioSlime:
     def manhatdist(self,r1,c1,r2,c2):
         return abs(r2-r1)+abs(c2-c1)
 
-    def buildHarvestorSubGrids(self):
+    def buildHarvesterSubGrids(self):
         subgrids = dict()
         for h,(r,c) in enumerate(self.har):
             subgrp,unused = self.calcSubGrid(r,c)
@@ -529,7 +597,7 @@ class BioSlime:
         return subgrids
 
 
-    def isNeighborBusy(self, h, moves, limit=2):
+    def isNeighborBusy(self, h, moves, limit=3):
         begr,begc = self.har[h]
 
         for h2 in range(self.H):
@@ -795,7 +863,7 @@ class BioSlime:
         # Read the updated grid
         self.tester.parseGrid(self.grid)
 
-        # fix bad depots and harvestor position
+        # fix bad depots and harvester position
         changed = False
         for i,(dr,dc) in enumerate(self.depots):
             if self.grid[dr][dc] != 'd':
@@ -812,7 +880,7 @@ class BioSlime:
         self.turn = turn
         explored = set()
 
-        # find the slimes and nearest harvestors
+        # find the slimes and nearest harvesters
         self.slimes = []
         self.slimeId = dict()
         for r in range(self.N):
@@ -824,7 +892,7 @@ class BioSlime:
             elif self.grid[r][c] == 'W':# or grid[r][c] == 'd':
                 explored.add((r,c))
                 
-        #self.slimeSubGrids = self.buildSlimeSubGrids(slimes)
+        self.slimeSubGrids = self.buildSlimeSubGrids(self.slimes)
 
         applcableCapacity = self.calStrategy.calculateApplicableCapacity(turn, len(self.slimes))
         depotbusy = self.depotbad[:]
@@ -891,8 +959,8 @@ class BioSlime:
         for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
                 continue
-            #if self.isNeighborBusy(h, moveCmds):
-            #    continue
+            if self.isNeighborBusy(h, moveCmds):
+                continue
             if not self.load[h]:
                 moveCmds[h] = self.wander(h, explored, self.load[h], depotbusy)
                 if debugStrategy:
@@ -929,7 +997,7 @@ class AutoTester:
             self.carry = [0]*H 
             self.entityC = [0]*H 
             self.entityR = [0]*H 
-            locDepots = [0]*D
+            #locDepots = [0]*D
             numSlime = 0;
             numHarvesters = 0;
             numDepots = 0;
@@ -1003,26 +1071,25 @@ class AutoTester:
             
             assert(calcReachable() == emptyCells)
             available = [(r,c) for r in range(self.N) for c in range(self.N) if not explored[r][c]]            
+            random.shuffle(available)
             for i in range(D):
 
                 if not available:
                     break
                 
-                while True:
-                    tgt = random.randint(0,len(available)-1)
-                    r,c = available[tgt]
+                while available:
+                    r,c = available.pop()
                     old = self.grid[r][c]
                     self.grid[r][c] = DEPOT;
                     emptyCells-=1
-                    del available[tgt]
                     if calcReachable() != emptyCells:
+                        eprint('Cannot place depot',len(available),calcReachable(),emptyCells);
                         self.grid[r][c] = old
                         emptyCells+=1
-                        eprint('Cannot place depot',len(available),calcReachable(),emptyCells);
                         continue
+                    #locDepots[numDepots] = r*N+c;
                     break
                 
-                locDepots[numDepots] = r*N+c;
                 numDepots+=1
 
             if not available:
@@ -1058,6 +1125,7 @@ class AutoTester:
         if debugGrid:
             eprint('Tester ready')
             eprint(self.grid)
+
 
     def setupHarvester(self):
         har = [(0,0)]*self.H
@@ -1236,10 +1304,51 @@ if __name__ == "__main__":
     parser.add_argument('-S', '--slimeS', type=float, default=0.1, help='Slime probability')
     parser.add_argument('-P', '--slimeP', type=float, default=0.1, help='Slime probability')
     parser.add_argument('-A', '--autotest', action='store_true', help='Run autotest')
+    parser.add_argument('-T', '--tune', action='store_true', help='Try to tune parameter')
+    parser.add_argument('-K', '--maxAllowedCapacity', type=int, default=MAXIMUM_ALLOWED_CAPACITY, help='Maximum capacity that is applicable')
+    parser.add_argument('-M', '--harvesterPerDepot', type=int, default=MIN_HARVESTOR_PER_DEPOT, help='Maximum harvester per depot')
 
     args = parser.parse_args()
-    if args.autotest:
-        tester = AutoTester(args.ngrid,args.depot,args.harvester,args.wall,args.capacity,args.slimeS,args.slimeP) # or StdTester
+    if args.tune:
+
+        result = [None]*31
+        for N in range(10,31):
+            result[N] = [None]*11
+            for D in range(1,11):
+                result[N][D] = [None]*21
+                for H in range(1,21):
+                    #bestscore = None
+                    #bestparam = None
+
+                    prototester = AutoTester(N,D,H,args.wall,args.capacity,args.slimeS,args.slimeP) 
+
+                    result[N][D][H] = []
+                    for maxAllowedCapacity in range(4,16):
+                        for harvesterPerDepot in range(4,16):
+                            MAXIMUM_ALLOWED_CAPACITY = maxAllowedCapacity
+                            MIN_HARVESTOR_PER_DEPOT = harvesterPerDepot
+
+                            tester = copy.deepcopy(prototester)
+
+                            bsalg = BioSlime(tester)
+                            bsalg.setup()
+
+                            # Simulate 1000 turns
+                            for turn in range(1000):
+                                bsalg.run(turn)
+
+                            print('Score',tester.calcScore())
+
+
+                            result[N][D][H].append((tester.calcScore(), (maxAllowedCapacity,harvesterPerDepot)))
+
+        print(result)
+
+    elif args.autotest:
+        MAXIMUM_ALLOWED_CAPACITY = args.maxAllowedCapacity
+        MIN_HARVESTOR_PER_DEPOT = args.harvesterPerDepot
+        # python3 BioSlime.py -N 30 -C 20 -D 8 -H 10 -S 0.5 -P 0.1 -W 0.1 -A
+        tester = AutoTester(args.ngrid,args.depot,args.harvester,args.wall,args.capacity,args.slimeS,args.slimeP) 
         bsalg = BioSlime(tester)
         bsalg.setup()
 
@@ -1249,6 +1358,9 @@ if __name__ == "__main__":
 
         print('Score',tester.calcScore())
     else:
+        MAXIMUM_ALLOWED_CAPACITY = args.maxAllowedCapacity
+        MIN_HARVESTOR_PER_DEPOT = args.harvesterPerDepot
+
         tester = StdTester()
         bsalg = BioSlime(tester)
         bsalg.setup()
