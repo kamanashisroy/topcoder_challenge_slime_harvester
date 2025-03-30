@@ -31,6 +31,7 @@ class Config:
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
         self.AUTOCFG = True
+        self.USE_RATIO_STRATEGY = False
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -148,9 +149,9 @@ class CalibrationStrategy:
 
     def calculateScore(self, numSlimes):
         
-        totalScore = self.N*self.N
+        totalScore = self.cfg.N*self.cfg.N
         totalScore -= numSlimes
-        for d in range(self.D):
+        for d in range(self.cfg.D):
             totalScore += self.depotscore[d]
         return totalScore
 
@@ -161,8 +162,8 @@ class CalibrationStrategy:
             self.prevNumSlimes = curNumSlimes
             return self.applcableCapacity
 
-        if turn >= self.PARAM_CLEANUP_TURN: # At the end use highest capacity
-            self.applcableCapacity = self.C
+        if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
+            self.applcableCapacity = self.cfg.C
             return self.applcableCapacity
 
         if (turn % 40) != 0:
@@ -171,13 +172,13 @@ class CalibrationStrategy:
         curScore = self.calculateScore(curNumSlimes)
 
         if curNumSlimes < self.prevNumSlimes:
-            if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes/self.PARAM_DIV):
+            if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes/self.cfg.PARAM_DIV):
                 self.applcableCapacity = self.applcableCapacity>>1
                 #if self.applcableCapacity < 2:
                 #    self.applcableCapacity = 2
         else:
-            if (curNumSlimes-self.prevNumSlimes) >= (self.prevNumSlimes/self.PARAM_DIV):
-                self.applcableCapacity = min(self.C,(self.applcableCapacity<<1))
+            if (curNumSlimes-self.prevNumSlimes) >= (self.prevNumSlimes/self.cfg.PARAM_DIV):
+                self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
 
 
         self.prevScore = curScore
@@ -213,7 +214,10 @@ class BioSlime:
         self.slimeId = dict()
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
-        self.calStrategy = CalibrationStrategyRatio(cfg)
+        if self.cfg.USE_RATIO_STRATEGY:
+            self.calStrategy = CalibrationStrategyRatio(cfg)
+        else:
+            self.calStrategy = CalibrationStrategy(cfg)
         self.harvesterStuck = [False]*self.H
 
     def setup(self):
@@ -1342,11 +1346,13 @@ if __name__ == "__main__":
     parser.add_argument('-O', '--optimize', action='store_true', default=cfg.OPTIMIZE, help='Make it run faster')
     parser.add_argument('-G', '--noautocfg', action='store_true', default=(not cfg.AUTOCFG), help='Do not read config value from params')
     parser.add_argument('-Z', '--pairHarvester', action='store_true', default=cfg.PAIR_HARVESTER, help='Harvester moves in group')
+    parser.add_argument('-R', '--useRatioStrategy', action='store_true', default=cfg.USE_RATIO_STRATEGY, help='Use ratio based calibration')
 
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
     cfg.PAIR_HARVESTER = args.pairHarvester
     cfg.AUTOCFG = not args.noautocfg
+    cfg.USE_RATIO_STRATEGY = args.useRatioStrategy
     if args.tune:
 
         result = [None]*31
