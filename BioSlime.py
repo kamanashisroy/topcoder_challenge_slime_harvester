@@ -27,7 +27,7 @@ class Config:
 
         self.MIN_HARVESTOR_PER_DEPOT=4
         self.PARAM_DIV = 3
-        self.PARAM_CLEANUP_TURN = 800
+        self.PARAM_CLEANUP_TURN = 880
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
         self.AUTOCFG = True
@@ -110,11 +110,6 @@ class CalibrationStrategyRatio:
         if debugCalStrategy and (turn % 40) == 0:
             eprint(turn, 'depot score', self.depotscore)
 
-        numharvesterStuck = 0
-        for x in self.harvesterStuck:
-            if x:
-                numharvesterStuck += 1
-
         #activeharvesters = self.H-numharvesterStuck
         activeharvesters = self.cfg.H
 
@@ -167,8 +162,17 @@ class CalibrationStrategy:
             self.prevNumSlimes = curNumSlimes
             return self.applcableCapacity
 
+        curScore = self.calculateScore(curNumSlimes)
+
+        numharvesterStuck = 0
+        for x in self.harvesterStuck:
+            if x:
+                numharvesterStuck += 1
+
         if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
             self.applcableCapacity = self.cfg.C
+            if debugCalStrategy and (turn % 40) == 0:
+                eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
             return self.applcableCapacity
 
         if (turn % 40) != 0:
@@ -176,8 +180,6 @@ class CalibrationStrategy:
 
         if debugCalStrategy and (turn % 40) == 0:
             eprint(turn, 'depot score', self.depotscore)
-
-        curScore = self.calculateScore(curNumSlimes)
 
         if curNumSlimes < self.prevNumSlimes:
             if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes/self.cfg.PARAM_DIV):
@@ -193,7 +195,7 @@ class CalibrationStrategy:
         self.prevNumSlimes = curNumSlimes
 
         if debugCalStrategy:
-            eprint(turn, 'Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore)
+            eprint(turn, 'Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
         return self.applcableCapacity
  
 
@@ -816,8 +818,13 @@ class BioSlime:
 
     def moveAwayFromSlimeWhenSurrounded(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
-        if myload < min(5,self.cfg.C>>1):
-            return None
+
+        if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
+            if myload < min(20,self.cfg.C>>1):
+                return None
+        else:
+            if myload < min(5,self.cfg.C>>1):
+                return None
 
         freeMoves = []
         for d in range(4):
