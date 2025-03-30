@@ -31,6 +31,7 @@ class Config:
         self.PARAM_CLEANUP_TURN = 800
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
+        self.AUTOCFG = True
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -41,12 +42,13 @@ class Config:
         if debugCalStrategy:
             eprint('Begin MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT, 'MAXIMUM_ALLOWED_CAPACITY',self.MAXIMUM_ALLOWED_CAPACITY)
 
-        if self.N < len(bestParams) and bestParams[self.N] is not None:
-            if self.D < len(bestParams[self.N]) and bestParams[self.N][self.D] is not None:
-                if self.H < len(bestParams[self.N][self.D]) and bestParams[self.N][self.D][self.H] is not None:
-                    self.MIN_HARVESTOR_PER_DEPOT,self.MAXIMUM_ALLOWED_CAPACITY = bestParams[self.N][self.D][self.H] 
-                    if debugCalStrategy:
-                        eprint('Adjusted auto param MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT, 'MAXIMUM_ALLOWED_CAPACITY',self.MAXIMUM_ALLOWED_CAPACITY)
+        if self.AUTOCFG:
+            if self.N < len(bestParams) and bestParams[self.N] is not None:
+                if self.D < len(bestParams[self.N]) and bestParams[self.N][self.D] is not None:
+                    if self.H < len(bestParams[self.N][self.D]) and bestParams[self.N][self.D][self.H] is not None:
+                        self.MIN_HARVESTOR_PER_DEPOT,self.MAXIMUM_ALLOWED_CAPACITY = bestParams[self.N][self.D][self.H] 
+                        if debugCalStrategy:
+                            eprint('Adjusted auto param MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT, 'MAXIMUM_ALLOWED_CAPACITY',self.MAXIMUM_ALLOWED_CAPACITY)
 
         if debugCalStrategy:
             eprint('CalibrationStrategyRatio:Cleanup turn', self.PARAM_CLEANUP_TURN)
@@ -96,6 +98,7 @@ class CalibrationStrategyRatio:
 
         if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
             self.applcableCapacity = min(self.cfg.MAXIMUM_ALLOWED_CAPACITY, self.cfg.C)
+            self.applcableCapacity = self.cfg.C
             if debugCalStrategy and (turn % 40) == 0:
                 eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
             return self.applcableCapacity
@@ -784,7 +787,7 @@ class BioSlime:
 
     def moveAwayFromSlimeWhenSurrounded(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
-        if myload <= 3:
+        if myload < min(5,self.cfg.C>>1):
             return None
 
         freeMoves = []
@@ -1340,11 +1343,13 @@ if __name__ == "__main__":
     parser.add_argument('-K', '--maxAllowedCapacity', type=int, default=cfg.MAXIMUM_ALLOWED_CAPACITY, help='Maximum capacity that is applicable')
     parser.add_argument('-M', '--harvesterPerDepot', type=int, default=cfg.MIN_HARVESTOR_PER_DEPOT, help='Maximum harvester per depot')
     parser.add_argument('-O', '--optimize', action='store_true', default=cfg.OPTIMIZE, help='Make it run faster')
+    parser.add_argument('-G', '--noautocfg', action='store_true', default=(not cfg.AUTOCFG), help='Do not read config value from params')
     parser.add_argument('-Z', '--pairHarvester', action='store_true', default=cfg.PAIR_HARVESTER, help='Harvester moves in group')
 
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
     cfg.PAIR_HARVESTER = args.pairHarvester
+    cfg.AUTOCFG = not args.noautocfg
     if args.tune:
 
         result = [None]*31
