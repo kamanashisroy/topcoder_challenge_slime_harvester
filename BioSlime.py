@@ -31,6 +31,7 @@ class Config:
         self.MIN_HARVESTOR_PER_DEPOT=4
         self.PARAM_DIV = 3
         self.PARAM_CLEANUP_TURN = 800
+        self.OPTIMIZE = False
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -50,6 +51,7 @@ class Config:
 
         if debugCalStrategy:
             eprint('CalibrationStrategyRatio:Cleanup turn', self.PARAM_CLEANUP_TURN)
+            eprint('OPTIMIZE', self.OPTIMIZE)
 
 class CalibrationStrategyRatio:
 
@@ -497,34 +499,32 @@ class BioSlime:
         
 
         hp = []
-        '''
-        for i,(sr,sc) in enumerate(self.slimes):
-            hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),i))
-        '''
-
-        MAXGRID,unused = self.calcSubGrid(self.N,self.N)[0]
-        grids = [(0,self.calcSubGrid(begr,begc)[0])]
-        exp = set()
-        prevdist = 0
-        while grids:
-            curdist,(subgr,subgc) = heappop(grids)
-            exp.add( (subgr,subgc) )
-            if curdist > prevdist and hp:
-                break # early exit
-            prevdist = curdist
-            if (subgr,subgc) in self.slimeSubGrids:
-                for idx in self.slimeSubGrids[(subgr,subgc)]:
-                    sr,sc = self.slimes[idx]
-                    hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),idx))
-            
-            for subgr2,subgc2 in [(subgr,subgc-1),(subgr-1,subgc-1),(subgr-1,subgc),(subgr-1,subgc+1),(subgr,subgc+1),(subgr+1,subgc+1),(subgr+1,subgc),(subgr+1,subgc-1)]:
-                if (subgr2,subgc2) in exp:
-                    continue
-                if subgr2 < 0 or subgc2 < 0 or subgr2 > MAXGRID or subgc2 > MAXGRID:
-                    continue
-                exp.add( (subgr2,subgc2) )
-                heappush(grids, (curdist+1,(subgr2,subgc2)) )
-            
+        if not cfg.OPTIMIZE:
+            for i,(sr,sc) in enumerate(self.slimes):
+                hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),i))
+        else:
+            MAXGRID,unused = self.calcSubGrid(self.N,self.N)[0]
+            grids = [(0,self.calcSubGrid(begr,begc)[0])]
+            exp = set()
+            prevdist = 0
+            while grids:
+                curdist,(subgr,subgc) = heappop(grids)
+                exp.add( (subgr,subgc) )
+                if curdist > prevdist and hp:
+                    break # early exit
+                prevdist = curdist
+                if (subgr,subgc) in self.slimeSubGrids:
+                    for idx in self.slimeSubGrids[(subgr,subgc)]:
+                        sr,sc = self.slimes[idx]
+                        hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),idx))
+                
+                for subgr2,subgc2 in [(subgr,subgc-1),(subgr-1,subgc-1),(subgr-1,subgc),(subgr-1,subgc+1),(subgr,subgc+1),(subgr+1,subgc+1),(subgr+1,subgc),(subgr+1,subgc-1)]:
+                    if (subgr2,subgc2) in exp:
+                        continue
+                    if subgr2 < 0 or subgc2 < 0 or subgr2 > MAXGRID or subgc2 > MAXGRID:
+                        continue
+                    exp.add( (subgr2,subgc2) )
+                    heappush(grids, (curdist+1,(subgr2,subgc2)) )
         
         if hp:
             unused,idx = min(hp)
@@ -1332,8 +1332,10 @@ if __name__ == "__main__":
     parser.add_argument('-T', '--tune', action='store_true', help='Try to tune parameter')
     parser.add_argument('-K', '--maxAllowedCapacity', type=int, default=cfg.MAXIMUM_ALLOWED_CAPACITY, help='Maximum capacity that is applicable')
     parser.add_argument('-M', '--harvesterPerDepot', type=int, default=cfg.MIN_HARVESTOR_PER_DEPOT, help='Maximum harvester per depot')
+    parser.add_argument('-O', '--optimize', action='store_true', default=cfg.OPTIMIZE, help='Make it run faster')
 
     args = parser.parse_args()
+    cfg.OPTIMIZE = args.optimize
     if args.tune:
 
         result = [None]*31
