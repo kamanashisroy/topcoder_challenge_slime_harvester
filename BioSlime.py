@@ -32,6 +32,8 @@ class Config:
         self.PAIR_HARVESTER = False
         self.AUTOCFG = True
         self.USE_RATIO_STRATEGY = False
+        self.USE_HIGHER_HARVESTOR_WHILE_CLEANUP = True
+        self.DUMP_TO_DEPOT_WHEN_NEAR = False
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -105,6 +107,9 @@ class CalibrationStrategyRatio:
         if (turn % 40) != 0:
             return self.applcableCapacity
 
+        if debugCalStrategy and (turn % 40) == 0:
+            eprint(turn, 'depot score', self.depotscore)
+
         numharvesterStuck = 0
         for x in self.harvesterStuck:
             if x:
@@ -168,6 +173,9 @@ class CalibrationStrategy:
 
         if (turn % 40) != 0:
             return self.applcableCapacity
+
+        if debugCalStrategy and (turn % 40) == 0:
+            eprint(turn, 'depot score', self.depotscore)
 
         curScore = self.calculateScore(curNumSlimes)
 
@@ -265,7 +273,13 @@ class BioSlime:
         harPerDepot = (self.H//numDepots)+1
         if harPerDepot < cfg.MIN_HARVESTOR_PER_DEPOT:
             harPerDepot = cfg.MIN_HARVESTOR_PER_DEPOT # try to keep harvesters concentrated
-        for i,(r,c) in enumerate(self.depots):
+
+        # sort depots based on points
+        targetdepots = [(self.depotscore[i],i) for i in range(self.D) if not self.depotbad[i]]
+        targetdepots.sort(reverse=True)
+
+        for unused,i in targetdepots:
+            r,c = self.depots[i]
             if not self.depotbad[i]:
                 dist = self.shortestPathFromDepot[i][0]
                 hp = []
@@ -684,8 +698,21 @@ class BioSlime:
             explored.add((nr,nc))
         return self.calcDir(nr,nc,r,c)
 
+
+    def moveToNearestDepotWhenTooNear(self,h,explored, myload, depotbusy):
+        r,c = self.har[h]
+        tgtdepotid = self.depotAffinity[h]
+        if tgtdepotid is not None and not depotbusy[tgtdepotid]:
+            dr,dc = self.depots[tgtdepotid]
+            if self.manhatdist(dr,dc,r,c) <= 2:
+                return self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
+        return None
+
+
     def moveToNearestDepot(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
+        if myload == 0:
+            return self.moveAwayFromNearestDepot(h,explored,myload,depotbusy)
 
         for nr,nc in self.iterMovesFindDepots(r,c,explored,myload):
             if self.grid[nr][nc] == 'd':
@@ -861,6 +888,7 @@ class BioSlime:
                 nc = c + self.dc[d]
                 if self.grid[nr][nc] == 'd':
                     self.planPath[h] = None
+                    self.depotscore[self.depotId[(nr,nc)]] += self.load[h]
                 else:
                     self.har[h] = [nr,nc]
                 
@@ -925,6 +953,11 @@ class BioSlime:
         self.slimeSubGrids = self.buildSlimeSubGrids(self.slimes)
 
         applcableCapacity = self.calStrategy.calculateApplicableCapacity(turn, len(self.slimes))
+        if turn == self.cfg.PARAM_CLEANUP_TURN:
+            if self.cfg.USE_HIGHER_HARVESTOR_WHILE_CLEANUP:
+                self.cfg.MIN_HARVESTOR_PER_DEPOT = 10
+            self.buildShortestPathFromDepot()
+
         depotbusy = self.depotbad[:]
 
         for h,(r,c) in enumerate(self.har):
@@ -941,6 +974,15 @@ class BioSlime:
             if moveCmds[h] is not None:
                 continue
             moveCmds[h] = self.moveAwayFromSlimeWhenSurrounded(h,explored,self.load[h],depotbusy) 
+
+
+        if self.cfg.DUMP_TO_DEPOT_WHEN_NEAR:
+            for h,(r,c) in enumerate(self.har):
+                if moveCmds[h] is not None:
+                    continue
+                if self.planPath[h] is not None and self.planPath[h][2] == 'd':
+                    moveCmds[h] = self.moveToNearestDepotWhenTooNear(h,explored, self.load[h], depotbusy)
+
 
         for h,(r,c) in enumerate(self.har):
             if moveCmds[h] is not None:
@@ -1347,12 +1389,14 @@ if __name__ == "__main__":
     parser.add_argument('-G', '--noautocfg', action='store_true', default=(not cfg.AUTOCFG), help='Do not read config value from params')
     parser.add_argument('-Z', '--pairHarvester', action='store_true', default=cfg.PAIR_HARVESTER, help='Harvester moves in group')
     parser.add_argument('-R', '--useRatioStrategy', action='store_true', default=cfg.USE_RATIO_STRATEGY, help='Use ratio based calibration')
+    parser.add_argument('-X', '--cleanupTurn', type=int, default=cfg.PARAM_CLEANUP_TURN, help='When we should go all out to collect Slimes')
 
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
     cfg.PAIR_HARVESTER = args.pairHarvester
     cfg.AUTOCFG = not args.noautocfg
     cfg.USE_RATIO_STRATEGY = args.useRatioStrategy
+    cfg.PARAM_CLEANUP_TURN = args.cleanupTurn
     if args.tune:
 
         result = [None]*31
