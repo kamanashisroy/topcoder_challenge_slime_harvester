@@ -30,6 +30,7 @@ class Config:
         self.PARAM_DIV = 3
         self.PARAM_CLEANUP_TURN = 800
         self.OPTIMIZE = False
+        self.PAIR_HARVESTER = False
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -50,6 +51,7 @@ class Config:
         if debugCalStrategy:
             eprint('CalibrationStrategyRatio:Cleanup turn', self.PARAM_CLEANUP_TURN)
             eprint('OPTIMIZE', self.OPTIMIZE)
+            eprint('PAIR_HARVESTER', self.PAIR_HARVESTER)
 
 class CalibrationStrategyRatio:
 
@@ -490,10 +492,11 @@ class BioSlime:
 
         tr,tc = dr,dc
 
-        for h2,(r2,c2) in enumerate(self.har):
-            if h2 != h:
-                if (self.manhatdist(begr,begc,r2,c2)+self.manhatdist(tr,tc,r2,c2)) < (self.manhatdist(begr,begc,dr,dc)+self.manhatdist(tr,tc,dr,dc)):
-                    dr,dc = r2,c2
+        if cfg.PAIR_HARVESTER:
+            for h2,(r2,c2) in enumerate(self.har):
+                if h2 != h:
+                    if (self.manhatdist(begr,begc,r2,c2)+self.manhatdist(tr,tc,r2,c2)) < (self.manhatdist(begr,begc,dr,dc)+self.manhatdist(tr,tc,dr,dc)):
+                        dr,dc = r2,c2
         
 
         hp = []
@@ -1337,9 +1340,11 @@ if __name__ == "__main__":
     parser.add_argument('-K', '--maxAllowedCapacity', type=int, default=cfg.MAXIMUM_ALLOWED_CAPACITY, help='Maximum capacity that is applicable')
     parser.add_argument('-M', '--harvesterPerDepot', type=int, default=cfg.MIN_HARVESTOR_PER_DEPOT, help='Maximum harvester per depot')
     parser.add_argument('-O', '--optimize', action='store_true', default=cfg.OPTIMIZE, help='Make it run faster')
+    parser.add_argument('-Z', '--pairHarvester', action='store_true', default=cfg.PAIR_HARVESTER, help='Harvester moves in group')
 
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
+    cfg.PAIR_HARVESTER = args.pairHarvester
     if args.tune:
 
         result = [None]*31
