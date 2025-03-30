@@ -4,7 +4,7 @@
 BIOSLIME='BioSlime.py'
 targets = []
 
-for harvesterPerDepot in range(4,8):
+for harvesterPerDepot in range(4,16):
 
     for maxAllowedCapacity in range(8,16):
         for N in range(10,20): #range(10,31):
