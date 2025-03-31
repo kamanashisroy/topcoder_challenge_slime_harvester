@@ -33,7 +33,6 @@ class Config:
         self.USE_RATIO_STRATEGY = False
         self.USE_HIGHER_HARVESTOR_WHILE_CLEANUP = True
         self.DUMP_TO_DEPOT_WHEN_NEAR = False
-        self.ALLOW_GRADUAL_INCREASE = True
         self.FW_THRESHOLD = 14
 
     def setup(self, N, D, H, C):
@@ -174,6 +173,15 @@ class CalibrationStrategy:
             totalScore += self.depotscore[d]
         return totalScore
 
+    def calcTotalCapacity(self):
+        return self.cfg.C*self.cfg.H*self.cfg.CAPACITY_MULTIPLIER
+
+    def shouldSlowdown(self, turn, curNumSlimes):
+        
+        if curNumSlimes < self.calcTotalCapacity() and turn < self.cfg.PARAM_CLEANUP_TURN:
+            return True
+        return False
+
     def calculateApplicableCapacity(self, turn, curNumSlimes):
 
         if 0 == turn:
@@ -197,7 +205,7 @@ class CalibrationStrategy:
         if (turn % self.wait) != 0:
             return self.applcableCapacity
 
-        totalCapacity = self.cfg.C*self.cfg.H*self.cfg.CAPACITY_MULTIPLIER
+        totalCapacity = self.calcTotalCapacity()
 
         if debugCalStrategy and (turn % self.wait) == 0:
             eprint(turn, 'depot score', self.depotscore, 'total capacity', totalCapacity)
@@ -722,10 +730,9 @@ class BioSlime:
         
         return None
 
-    def collectSlime(self,h,explored,myload,unusedDepotBusy):
+    def collectSlime(self,h,explored,myload,depotbusy):
 
-        totalCapacity = self.cfg.C*self.cfg.H*self.cfg.CAPACITY_MULTIPLIER
-        if len(self.slimes) < totalCapacity and self.turn < self.cfg.PARAM_CLEANUP_TURN:
+        if self.calStrategy.shouldSlowdown(self.turn, len(self.slimes)) and not self.isSurroundedBySlime(h,explored, myload, depotbusy):
             if self.turn&1:
                 return None # do not take action
 
@@ -786,6 +793,12 @@ class BioSlime:
         if myload == 0:
             return self.moveAwayFromNearestDepot(h,explored,myload,depotbusy)
 
+
+        if self.calStrategy.shouldSlowdown(self.turn, len(self.slimes)) and not self.isSurroundedBySlime(h,explored, myload, depotbusy):
+            if self.turn&1:
+                return None # do not take action
+
+
         for nr,nc in self.iterMovesFindDepots(r,c,explored,myload):
             if self.grid[nr][nc] == 'd':
                 self.planPath[h] = None
@@ -800,8 +813,14 @@ class BioSlime:
         if self.planPath[h] is None:
             self.planPath[h] = self.shortestPathToDepot(h,self.N*self.N,explored,myload,depotbusy)
 
-        elif (self.turn%4) == 0: # re-evaluate
-            self.planPath[h] = self.shortestPathToDepot(h,self.N*self.N,explored,myload,depotbusy)
+        else:
+            if (r,c) not in self.planPath[h][1] or self.planPath[h][1][(r,c)] in explored:
+                if debugStrategy:
+                    eprint(h,r,c,'move is occupied')
+                self.planPath[h] = self.shortestPathToDepot(h,self.N*self.N,explored,myload,depotbusy)
+      
+        #elif (self.turn%1) == 0: # re-evaluate
+        #    self.planPath[h] = self.shortestPathToDepot(h,self.N*self.N,explored,myload,depotbusy)
 
         if debugStrategy:
             eprint(h,r,c,'move to depot plan') #, self.planPath[h])
@@ -828,8 +847,8 @@ class BioSlime:
             # wait for other planPath[h] = None
             if debugStrategy:
                 eprint(h,r,c,'move is occupied', nr,nc)
-            if self.turn%4 == 0:
-                self.planPath[h] = None # find new path
+            #if self.turn%4 == 0:
+            self.planPath[h] = None # find new path
             return None # FIXME should we scatter here ?
         if self.grid[nr][nc] == 's' and myload >= self.C:
             self.planPath[h] = None
@@ -886,16 +905,8 @@ class BioSlime:
 
         return None
 
-    def moveAwayFromSlimeWhenSurrounded(self,h,explored, myload, depotbusy):
+    def isSurroundedBySlime(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
-
-        if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
-            if myload < min(20,self.cfg.C>>1):
-                return None
-        else:
-            if myload < min(5,self.cfg.C>>1):
-                return None
-
         freeMoves = []
         for d in range(4):
             nr = r + self.dr[d]
@@ -905,18 +916,24 @@ class BioSlime:
             if (nr,c) in explored:
                 continue
             freeMoves.append((nr,nc))
+        return len(freeMoves) <= 1
 
-        #if debugStrategy:
-        #    eprint(h, r, c, 'moveAwayFromSlimeWhenSurrounded freeMoves', freeMoves)
-        if len(freeMoves) <= 1:
+
+    def moveAwayFromSlimeWhenSurrounded(self,h,explored, myload, depotbusy):
+        r,c = self.har[h]
+
+        if (1000-turn) < 40: # At the end use highest capacity
+            return None
+        elif turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
+            if myload < min(20,self.cfg.C>>1):
+                return None
+        else:
+            if myload < min(5,self.cfg.C>>1):
+                return None
+
+        if self.isSurroundedBySlime(h,explored, myload, depotbusy):
             if debugStrategy:
                 eprint(h, r, c, 'moveAwayFromSlimeWhenSurrounded is stuck')
-            ret = self.moveToNearestDepot(h,explored,myload,depotbusy)
-            #if ret is None and freeMoves:
-            #    explored.add(freeMoves[-1])
-            #    nr,nc = freeMoves[-1]
-            #    return self.calcDir(nr,nc,r,c)
-            return ret
         return None
 
     def wander(self, h, explored, myload, depotbusy):
@@ -1088,7 +1105,7 @@ class BioSlime:
                     eprint('Harvester ',h,r,c, 'moving to nearestet depot via new path', moveCmds[h])
 
             elif self.slimes:
-                moveCmds[h] = self.collectSlime(h,explored,self.load[h],None)
+                moveCmds[h] = self.collectSlime(h,explored,self.load[h],depotbusy)
                 if debugStrategy:
                     eprint('Harvester ',h,r,c, 'Collecting slime in new path', moveCmds[h])
             else:
