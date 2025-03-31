@@ -2,7 +2,7 @@ import os
 import re
 
 # N_15_D_3_H_8_7_13
-pat = r'..N_(?P<N>\d*)_D_(?P<D>\d*)_H_(?P<H>\d*)_(?P<harvesterPerDepot>\d*)_(?P<cleanupTurn>\d*)'
+pat = r'..N_(?P<N>\d*)_D_(?P<D>\d*)_H_(?P<H>\d*)_(?P<cleanupTurn>\d*)'
 p = re.compile(pat)
 table = dict()
 def parseFile(filename):
@@ -11,16 +11,18 @@ def parseFile(filename):
     N,D,H = int(m.group('N')),int(m.group('D')),int(m.group('H'))
     key = (N,D,H)
     scores = []
-    #print('opening',filename,key)
+    print('opening',filename,key)
     with open(filename) as fd:
         for line in fd:
             if line.startswith('Score = '):
                 scores.append(float(line[8:]))
+            elif line.startswith('Score '):
+                scores.append(float(line[6:]))
     if scores:
         if key not in table:
             table[key] = []
 
-        table[key].append([(int(m.group('harvesterPerDepot')),int(m.group('cleanupTurn'))),scores])
+        table[key].append([int(m.group('cleanupTurn')),scores])
     
 
 folder_path = '.'
