@@ -723,6 +723,12 @@ class BioSlime:
         return None
 
     def collectSlime(self,h,explored,myload,unusedDepotBusy):
+
+        totalCapacity = self.cfg.C*self.cfg.H*self.cfg.CAPACITY_MULTIPLIER
+        if len(self.slimes) < totalCapacity and self.turn < self.cfg.PARAM_CLEANUP_TURN:
+            if self.turn&1:
+                return None # do not take action
+
         r,c = self.har[h]
         if myload >= self.C:
             self.planPath[h] = None
@@ -1002,7 +1008,6 @@ class BioSlime:
 
         if changed:
             self.buildShortestPathFromDepot()
-            self.buildFWshortestPath()
 
  
     def run(self,turn):
