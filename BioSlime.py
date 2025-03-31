@@ -34,6 +34,7 @@ class Config:
         self.USE_HIGHER_HARVESTOR_WHILE_CLEANUP = True
         self.DUMP_TO_DEPOT_WHEN_NEAR = False
         self.ALLOW_GRADUAL_INCREASE = True
+        self.FW_THRESHOLD = 14
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -279,8 +280,42 @@ class BioSlime:
 
         # This path will be useful to return to depot
         self.buildShortestPathFromDepot()
+        self.buildFWshortestPath()
 
         eprint('-N',self.N,'-D',self.D,'-H',self.H,'-C',self.C)
+
+    def buildFWshortestPath(self):
+        if self.N < self.cfg.FW_THRESHOLD:
+            self.fw = [[None]*self.N for _ in range(self.N)]
+
+            INF = float('Inf')
+
+            for r in range(self.N):
+                for c in range(self.N):
+                    self.fw[r][c] = [[INF]*self.N for _ in range(self.N)]
+                    if self.grid[r][c] != WALL:
+                        self.fw[r][c][r][c] = 0 
+                        for d in range(4):
+                            nr = r + self.dr[d]
+                            nc = c + self.dc[d]
+                            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W':
+                                continue
+                            self.fw[r][c][nr][nc] = 1
+
+            for r in range(self.N):
+                for c in range(self.N):
+                    if self.grid[r][c] == WALL:
+                        continue
+                    for r2 in range(self.N):
+                        for c2 in range(self.N):
+                            if self.grid[r2][c2] == WALL or (r,c) == (r2,c2) or INF == self.fw[r][c][r2][c2]:
+                                continue
+                            for r3 in range(self.N):
+                                for c3 in range(self.N):
+                                    if self.grid[r3][c3] == WALL or (r,c) == (r3,c3) or (r2,c2) == (r3,c3):
+                                        continue
+                                    self.fw[r2][c2][r3][c3] = min(self.fw[r2][c2][r3][c3], self.fw[r][c][r2][c2]+self.fw[r][c][r3][c3])
+        
 
     def buildShortestPathFromDepot(self):
         self.shortestPathFromDepot = [None]*self.D
@@ -614,7 +649,14 @@ class BioSlime:
         subc,c2 = divmod(c,self.RN)
         return (subr,subc),(r2,c2)
 
+
+    def fwdist(self,r1,c1,r2,c2):
+        return self.fw[r1][c1][r2][c2]
+
+
     def manhatdist(self,r1,c1,r2,c2):
+        if self.N < self.cfg.FW_THRESHOLD:
+            return self.fwdist(r1,c1,r2,c2)
         return abs(r2-r1)+abs(c2-c1)
 
     def buildHarvesterSubGrids(self):
@@ -960,6 +1002,7 @@ class BioSlime:
 
         if changed:
             self.buildShortestPathFromDepot()
+            self.buildFWshortestPath()
 
  
     def run(self,turn):
