@@ -1450,23 +1450,33 @@ if __name__ == "__main__":
                     prototester = AutoTester(N,D,H,args.wall,args.capacity,args.slimeP,args.spreadP) 
 
                     result[N][D][H] = []
-                    for maxAllowedCapacity in range(4,16):
-                        for harvesterPerDepot in range(4,16):
-                            cfg.MIN_HARVESTOR_PER_DEPOT = harvesterPerDepot
 
-                            tester = copy.deepcopy(prototester)
+                    for ratioBased in range(2):
+                        for cleanupTurn in (800,850,900):
+                            for harvesterPerDepot in range(4,16):
 
-                            bsalg = BioSlime(tester,cfg)
-                            bsalg.setup()
+                                if ratioBased:
+                                    cfg.USE_RATIO_STRATEGY = True
+                                else:
+                                    cfg.USE_RATIO_STRATEGY = False
+                                cfg.MIN_HARVESTOR_PER_DEPOT = harvesterPerDepot
+                                cfg.PARAM_CLEANUP_TURN = cleanupTurn
 
-                            # Simulate 1000 turns
-                            for turn in range(1000):
-                                bsalg.run(turn)
+                                tester = copy.deepcopy(prototester)
 
-                            print('Score',tester.calcScore())
+                                bsalg = BioSlime(tester,cfg)
+                                bsalg.setup()
+
+                                # Simulate 1000 turns
+                                for turn in range(1000):
+                                    bsalg.run(turn)
+
+                                print('Score',tester.calcScore())
 
 
-                            result[N][D][H].append((tester.calcScore(), (maxAllowedCapacity,harvesterPerDepot)))
+                                result[N][D][H].append((tester.calcScore(), (ratioBased, cleanupTurn, harvesterPerDepot)))
+
+                    result[N][D][H] = max(result[N][D][H])
 
         print(result)
 
