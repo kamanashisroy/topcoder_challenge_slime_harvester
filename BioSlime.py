@@ -184,7 +184,7 @@ class CalibrationStrategy:
             if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes/self.cfg.PARAM_DIV):
                 self.applcableCapacity = self.applcableCapacity>>1
             elif cfg.ALLOW_GRADUAL_INCREASE:
-                self.applcableCapacity = min(self.applcableCapacity-4,0)
+                self.applcableCapacity = max(self.applcableCapacity-4,0)
         elif curNumSlimes > self.prevNumSlimes:
             if (curNumSlimes-self.prevNumSlimes) >= (self.prevNumSlimes/self.cfg.PARAM_DIV):
                 self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
