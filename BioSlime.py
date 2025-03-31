@@ -1068,10 +1068,10 @@ class AutoTester:
         self.N = N
         self.D = D
         self.H = H
-        self.wallP = int(W*10)
+        self.wallP = int(W*100)
         self.C = C
-        self.slimeP = int(S*10)
-        self.P = P
+        self.slimeP = int(S*100)
+        self.spreadP = int(P*100)
         self.dc = [1,0,-1,0]
         self.dr = [0,1,0,-1]
 
@@ -1131,7 +1131,7 @@ class AutoTester:
             # place slime and walls
             for i in range(N):
                 for k in range(N):
-                    p = random.randint(0,9)
+                    p = random.randint(0,100)
                     if p<self.slimeP:
                         self.grid[i][k] = SLIME
                         numSlime+=1
@@ -1258,7 +1258,8 @@ class AutoTester:
                     self.carry[h] += 1
                     assert(self.carry[h] <= self.C)
                 elif self.grid[r-1][c] == DEPOT:
-                    self.depot[(r,c)] += 1
+                    self.depot[(r,c)] += self.carry[h]
+                    self.carry[h] = 0
                     continue
 
                 self.grid[r][c] = EMPTY
@@ -1279,7 +1280,8 @@ class AutoTester:
                     self.carry[h] += 1
                     assert(self.carry[h] <= self.C)
                 elif self.grid[r+1][c] == DEPOT:
-                    self.depot[(r,c)] += 1
+                    self.depot[(r,c)] += self.carry[h]
+                    self.carry[h] = 0
                     continue
 
                 self.grid[r][c] = EMPTY
@@ -1298,7 +1300,8 @@ class AutoTester:
                     self.carry[h] += 1
                     assert(self.carry[h] <= self.C)
                 elif self.grid[r][c-1] == DEPOT:
-                    self.depot[(r,c)] += 1
+                    self.depot[(r,c)] += self.carry[h]
+                    self.carry[h] = 0
                     continue
 
                 self.grid[r][c] = EMPTY
@@ -1319,7 +1322,8 @@ class AutoTester:
                     self.carry[h] += 1
                     assert(self.carry[h] <= self.C)
                 elif self.grid[r][c+1] == DEPOT:
-                    self.depot[(r,c)] += 1
+                    self.depot[(r,c)] += self.carry[h]
+                    self.carry[h] = 0
                     continue
 
                 self.grid[r][c] = EMPTY
@@ -1329,10 +1333,29 @@ class AutoTester:
                 self.grid[r][c] = HARVESTER
  
 
+        self.makeMoreSlime()
 
         #if debugGrid:
         #    eprint(self.grid)
 
+    def makeMoreSlime(self):
+        for r in range(self.N):
+            for c in range(self.N):
+                if self.grid[r][c] in (EMPTY,DEPOT):
+                    hasAdjSlime = False
+                    for d in range(4):
+                        nr = r+self.dr[d]
+                        nc = c+self.dc[d]
+                        if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]==WALL:
+                            continue
+                        if self.grid[nr][nc] == SLIME:
+                            hasAdjSlime = True
+                            break
+                    if hasAdjSlime:
+                        p = random.randint(0,100)
+                        if p < self.spreadP:
+                            self.grid[r][c] = SLIME
+                    
     def calcScore(self):
         score = self.N*self.N
         for r in range(self.N):
@@ -1396,8 +1419,8 @@ if __name__ == "__main__":
     parser.add_argument('-H', '--harvester', type=int, default=1, help='Number of Harvester')
     parser.add_argument('-W', '--wall', type=float, default=0.1, help='Wall probability')
     parser.add_argument('-C', '--capacity', type=int, default=1, help='Number of slimes the harvester can carry')
-    parser.add_argument('-S', '--slimeS', type=float, default=0.1, help='Slime probability')
-    parser.add_argument('-P', '--slimeP', type=float, default=0.1, help='Slime probability')
+    parser.add_argument('-S', '--slimeP', type=float, default=0.1, help='Slime probability')
+    parser.add_argument('-P', '--spreadP', type=float, default=0.1, help='Slime probability')
     parser.add_argument('-A', '--autotest', action='store_true', help='Run autotest')
     parser.add_argument('-T', '--tune', action='store_true', help='Try to tune parameter')
     parser.add_argument('-M', '--harvesterPerDepot', type=int, default=cfg.MIN_HARVESTOR_PER_DEPOT, help='Maximum harvester per depot')
@@ -1424,7 +1447,7 @@ if __name__ == "__main__":
                     #bestscore = None
                     #bestparam = None
 
-                    prototester = AutoTester(N,D,H,args.wall,args.capacity,args.slimeS,args.slimeP) 
+                    prototester = AutoTester(N,D,H,args.wall,args.capacity,args.slimeP,args.spreadP) 
 
                     result[N][D][H] = []
                     for maxAllowedCapacity in range(4,16):
@@ -1450,7 +1473,7 @@ if __name__ == "__main__":
     elif args.autotest:
         cfg.MIN_HARVESTOR_PER_DEPOT = args.harvesterPerDepot
         # python3 BioSlime.py -N 30 -C 20 -D 8 -H 10 -S 0.5 -P 0.1 -W 0.1 -A
-        tester = AutoTester(args.ngrid,args.depot,args.harvester,args.wall,args.capacity,args.slimeS,args.slimeP) 
+        tester = AutoTester(args.ngrid,args.depot,args.harvester,args.wall,args.capacity,args.slimeP,args.spreadP) 
         bsalg = BioSlime(tester,cfg)
         bsalg.setup()
 
@@ -1463,6 +1486,10 @@ if __name__ == "__main__":
         cfg.MIN_HARVESTOR_PER_DEPOT = args.harvesterPerDepot
 
         tester = StdTester()
+
+        if tester.H < 6:
+            cfg.USE_RATIO_STRATEGY=True # this is working well in example case
+
         bsalg = BioSlime(tester,cfg)
         bsalg.setup()
 
