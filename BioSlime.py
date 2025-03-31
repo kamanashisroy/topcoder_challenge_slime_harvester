@@ -213,7 +213,7 @@ class CalibrationStrategy:
         if curNumSlimes < totalCapacity:
             #self.applcableCapacity = self.applcableCapacity>>1
             self.applcableCapacity = 0
-            self.wait = 40
+            self.wait = 20
         else:
             if 0 == self.applcableCapacity:
                 self.applcableCapacity = 1
@@ -357,7 +357,7 @@ class BioSlime:
                     if (hr,hc) in dist:
                         hp.append((dist[(hr,hc)],h))
                 heapify(hp)
-                if len(hp) < (harPerDepot+ (harPerDepot>>1)):
+                if len(hp) < (harPerDepot<<1):
                     harPerDepot = len(hp)
                 numHar = 0
                 while hp and numHar < harPerDepot:
