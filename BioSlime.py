@@ -25,7 +25,7 @@ class Config:
     def __init__(self):
 
         self.MIN_HARVESTOR_PER_DEPOT=4
-        self.CAPACITY_MULTIPLIER = 8
+        self.CAPACITY_MULTIPLIER = 1
         self.PARAM_CLEANUP_TURN = 840
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
@@ -53,9 +53,10 @@ class Config:
                             eprint('Adjusted auto param MIN_HARVESTOR_PER_DEPOT',  self.MIN_HARVESTOR_PER_DEPOT)
 
         if debugCalStrategy:
-            eprint('CalibrationStrategy:Cleanup turn', self.PARAM_CLEANUP_TURN)
+            eprint('CalibrationStrategy: PARAM_CLEANUP_TURN', self.PARAM_CLEANUP_TURN)
             eprint('OPTIMIZE', self.OPTIMIZE)
             eprint('PAIR_HARVESTER', self.PAIR_HARVESTER)
+            eprint('CAPACITY_MULTIPLIER', self.CAPACITY_MULTIPLIER)
 
 class CalibrationStrategyRatio:
 
@@ -136,6 +137,7 @@ class CalibrationStrategy:
         # calibration logic
         self.prevScore = 0
         self.prevNumSlimes = 0
+        self.wait = 10
 
 
     def setupDepot(self,depotbad,depotscore):
@@ -174,40 +176,25 @@ class CalibrationStrategy:
                 eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
             return self.applcableCapacity
 
-        if (turn % 40) != 0:
+        if (turn % self.wait) != 0:
             return self.applcableCapacity
 
+        totalCapacity = self.cfg.C*self.cfg.H*self.cfg.CAPACITY_MULTIPLIER
+
         if debugCalStrategy and (turn % 40) == 0:
-            eprint(turn, 'depot score', self.depotscore)
+            eprint(turn, 'depot score', self.depotscore, 'total capacity', totalCapacity)
 
-        totalCapacity = self.applcableCapacity*self.cfg.H
-
-        if curNumSlimes < (totalCapacity)*self.cfg.CAPACITY_MULTIPLIER:
-            self.applcableCapacity = self.applcableCapacity>>1
+        if curNumSlimes < totalCapacity:
+            #self.applcableCapacity = self.applcableCapacity>>1
+            self.applcableCapacity = 0
+            self.wait = 40
         else:
-            self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
+            if 0 == self.applcableCapacity:
+                self.applcableCapacity = 1
+            #self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
+            self.applcableCapacity = self.cfg.C
+            self.wait = 10
 
-        '''
-        if curNumSlimes < self.prevNumSlimes:
-            if (self.prevNumSlimes-curNumSlimes) >= (totalCapacity/self.cfg.CAPACITY_MULTIPLIER):
-                self.applcableCapacity = self.applcableCapacity>>1
-            elif cfg.ALLOW_GRADUAL_INCREASE:
-                self.applcableCapacity = max(self.applcableCapacity-4,0)
-        elif curNumSlimes > self.prevNumSlimes:
-            if (curNumSlimes-self.prevNumSlimes) >= (totalCapacity/self.cfg.CAPACITY_MULTIPLIER):
-                self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
-            else:
-                #self.applcableCapacity = min(self.cfg.C, self.applcableCapacity+1)
-                pass
-        '''
-
-        '''
-        ratio = curNumSlimes/self.cfg.H
-        if ratio > 8:
-            if debugCalStrategy:
-                eprint(turn, 'Using ratio', ratio)
-            self.applcableCapacity = min(self.cfg.C, int(ratio))
-        '''
 
         self.prevScore = curScore
         self.prevNumSlimes = curNumSlimes
@@ -1437,8 +1424,8 @@ if __name__ == "__main__":
     parser.add_argument('-G', '--noautocfg', action='store_true', default=(not cfg.AUTOCFG), help='Do not read config value from params')
     parser.add_argument('-Z', '--pairHarvester', action='store_true', default=cfg.PAIR_HARVESTER, help='Harvester moves in group')
     parser.add_argument('-R', '--useRatioStrategy', action='store_true', default=cfg.USE_RATIO_STRATEGY, help='Use ratio based calibration')
-    parser.add_argument('-X', '--cleanupTurn', type=int, default=cfg.PARAM_CLEANUP_TURN, help='When we should go all out to collect Slimes')
-    parser.add_argument('-Y', '--capacityMultipliyer', type=int, default=cfg.PARAM_CLEANUP_TURN, help='Capacity multiplier')
+    parser.add_argument('-E', '--cleanupTurn', type=int, default=cfg.PARAM_CLEANUP_TURN, help='When we should go all out to collect Slimes')
+    parser.add_argument('-X', '--capacityMultipliyer', type=float, default=cfg.CAPACITY_MULTIPLIER, help='Capacity multiplier')
 
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
