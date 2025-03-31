@@ -213,7 +213,7 @@ class CalibrationStrategy:
         if curNumSlimes < totalCapacity:
             #self.applcableCapacity = self.applcableCapacity>>1
             self.applcableCapacity = 0
-            self.wait = 40
+            self.wait = 20
         else:
             if 0 == self.applcableCapacity:
                 self.applcableCapacity = 1
