@@ -26,13 +26,14 @@ class Config:
 
         self.MIN_HARVESTOR_PER_DEPOT=4
         self.PARAM_DIV = 3
-        self.PARAM_CLEANUP_TURN = 880
+        self.PARAM_CLEANUP_TURN = 840
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
         self.AUTOCFG = True
         self.USE_RATIO_STRATEGY = False
         self.USE_HIGHER_HARVESTOR_WHILE_CLEANUP = True
         self.DUMP_TO_DEPOT_WHEN_NEAR = False
+        self.ALLOW_GRADUAL_INCREASE = True
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -182,11 +183,14 @@ class CalibrationStrategy:
         if curNumSlimes < self.prevNumSlimes:
             if (self.prevNumSlimes-curNumSlimes) >= (curNumSlimes/self.cfg.PARAM_DIV):
                 self.applcableCapacity = self.applcableCapacity>>1
-                #if self.applcableCapacity < 2:
-                #    self.applcableCapacity = 2
-        else:
+            elif cfg.ALLOW_GRADUAL_INCREASE:
+                self.applcableCapacity = min(self.applcableCapacity-4,0)
+        elif curNumSlimes > self.prevNumSlimes:
             if (curNumSlimes-self.prevNumSlimes) >= (self.prevNumSlimes/self.cfg.PARAM_DIV):
                 self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
+            else:
+                #self.applcableCapacity = min(self.cfg.C, self.applcableCapacity+1)
+                pass
 
         '''
         ratio = curNumSlimes/self.cfg.H
@@ -1406,7 +1410,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
     cfg.PAIR_HARVESTER = args.pairHarvester
-    cfg.AUTOCFG = not args.noautocfg
+    cfg.AUTOCFG = (not args.noautocfg)
     cfg.USE_RATIO_STRATEGY = args.useRatioStrategy
     cfg.PARAM_CLEANUP_TURN = args.cleanupTurn
     if args.tune:
