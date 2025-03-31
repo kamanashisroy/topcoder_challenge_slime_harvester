@@ -26,7 +26,7 @@ class Config:
 
         self.MIN_HARVESTOR_PER_DEPOT=4
         self.CAPACITY_MULTIPLIER = 1
-        self.PARAM_CLEANUP_TURN = 840
+        self.PARAM_CLEANUP_TURN = 700
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
         self.AUTOCFG = True
@@ -181,7 +181,7 @@ class CalibrationStrategy:
 
         totalCapacity = self.cfg.C*self.cfg.H*self.cfg.CAPACITY_MULTIPLIER
 
-        if debugCalStrategy and (turn % 40) == 0:
+        if debugCalStrategy and (turn % self.wait) == 0:
             eprint(turn, 'depot score', self.depotscore, 'total capacity', totalCapacity)
 
         if curNumSlimes < totalCapacity:
