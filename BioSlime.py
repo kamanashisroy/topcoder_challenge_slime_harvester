@@ -30,10 +30,10 @@ class Config:
         self.OPTIMIZE = False
         self.PAIR_HARVESTER = False
         self.AUTOCFG = True
-        self.USE_RATIO_STRATEGY = False
         self.USE_HIGHER_HARVESTOR_WHILE_CLEANUP = True
         self.DUMP_TO_DEPOT_WHEN_NEAR = False
         self.FW_THRESHOLD = 14
+        self.CHOOSE_DEPOTS_WITH_FREE_SPACE = True
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -69,76 +69,6 @@ class Config:
             eprint('PAIR_HARVESTER', self.PAIR_HARVESTER)
             eprint('CAPACITY_MULTIPLIER', self.CAPACITY_MULTIPLIER)
 
-class CalibrationStrategyRatio:
-
-    def __init__(self, cfg):
-        self.cfg = cfg
-
-
-        # calibration logic
-        self.prevScore = 0
-        self.prevNumSlimes = 0
-
-    def setupDepot(self,depotbad,depotscore):
-        self.depotbad = depotbad
-        self.depotscore = depotscore
-
-    def setupHarvester(self, harvesterStuck):
-        self.harvesterStuck = harvesterStuck
-        self.applcableCapacity = min(2,self.cfg.C)
-
-    def calculateScore(self, numSlimes):
-        
-        totalScore = self.cfg.N*self.cfg.N
-        totalScore -= numSlimes
-        for d in range(self.cfg.D):
-            totalScore += self.depotscore[d]
-        return totalScore
-
-    def calculateApplicableCapacity(self, turn, curNumSlimes):
-
-        if 0 == turn:
-            self.prevScore = self.calculateScore(curNumSlimes)
-            self.prevNumSlimes = curNumSlimes
-            return self.applcableCapacity
-
-        curScore = self.calculateScore(curNumSlimes)
-
-        numharvesterStuck = 0
-        for x in self.harvesterStuck:
-            if x:
-                numharvesterStuck += 1
-
-
-        if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
-            self.applcableCapacity = self.cfg.C
-            if debugCalStrategy and (turn % 40) == 0:
-                eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
-            return self.applcableCapacity
-
-        if (turn % 40) != 0:
-            return self.applcableCapacity
-
-        if debugCalStrategy and (turn % 40) == 0:
-            eprint(turn, 'depot score', self.depotscore)
-
-        #activeharvesters = self.H-numharvesterStuck
-        activeharvesters = self.cfg.H
-
-        if activeharvesters:
-            ratio = curNumSlimes/activeharvesters
-            self.applcableCapacity = min(max(0,int(ratio-1)),self.cfg.C)
-        else:
-            self.applcableCapacity = self.cfg.C
-
-
-        self.prevScore = curScore
-        self.prevNumSlimes = curNumSlimes
-
-        if debugCalStrategy:
-            eprint(turn, 'Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
-        return self.applcableCapacity
- 
 class CalibrationStrategy:
 
     def __init__(self, cfg):
@@ -249,10 +179,7 @@ class BioSlime:
         self.slimeId = dict()
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
-        if self.cfg.USE_RATIO_STRATEGY:
-            self.calStrategy = CalibrationStrategyRatio(cfg)
-        else:
-            self.calStrategy = CalibrationStrategy(cfg)
+        self.calStrategy = CalibrationStrategy(cfg)
         self.harvesterStuck = [False]*self.H
 
     def setup(self):
@@ -335,9 +262,32 @@ class BioSlime:
         if harPerDepot < cfg.MIN_HARVESTOR_PER_DEPOT:
             harPerDepot = cfg.MIN_HARVESTOR_PER_DEPOT # try to keep harvesters concentrated
 
+
+
         # sort depots based on points
         targetdepots = [(self.depotscore[i],i) for i in range(self.D) if not self.depotbad[i]]
         targetdepots.sort(reverse=True)
+
+
+        if self.cfg.CHOOSE_DEPOTS_WITH_FREE_SPACE and targetdepots and targetdepots[0][0] == 0:
+            targetdepots = []
+            for i,(r,c) in enumerate(self.depots):
+                if self.depotbad[i]:
+                    continue
+                stack = [(r,c)]
+                nbr_explored = set()
+                while stack:
+                    rr,cc = stack.pop()
+                    
+                    for nr,nc in self.iterMoves(rr,cc):
+                        if self.manhatdist(nr,nc,r,c) > 4:
+                            continue
+                        if (nr,nc) in nbr_explored:
+                            continue
+                        nbr_explored.add((nr,nc))
+                        stack.append((nr,nc))
+                targetdepots.append((len(nbr_explored),i))
+            targetdepots.sort()
 
         for unused,i in targetdepots:
             r,c = self.depots[i]
@@ -406,6 +356,15 @@ class BioSlime:
             if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W' or self.grid[nr][nc] == 'd':
                 continue
             yield (nr,nc)
+
+    def iterMovesSkipWallsAllowDepots(self,r,c):
+        for d in range(4):
+            nr = r + self.dr[d]
+            nc = c + self.dc[d]
+            if nc<0 or nc>=self.N or nr<0 or nr>=self.N or self.grid[nr][nc]=='W':
+                continue
+            yield (nr,nc)
+ 
         
     def iterMovesGivenExplored(self,r,c,explored,myload):
         for d in range(4):
@@ -688,8 +647,12 @@ class BioSlime:
         for h2 in range(self.H):
             if h!=h2 and moves[h2] is not None:
                 r,c = self.har[h2]
-                if self.manhatdist(begr,begc,r,c) <= limit:
-                    return True
+                for nr,nc in self.iterMovesSkipWallsAllowDepots(r,c):
+                    if self.grid[r][c] == DEPOT:
+                        break
+                else:
+                    if self.manhatdist(begr,begc,r,c) <= limit:
+                        return True
         return False
 
        
@@ -1499,17 +1462,17 @@ if __name__ == "__main__":
     parser.add_argument('-O', '--optimize', action='store_true', default=cfg.OPTIMIZE, help='Make it run faster')
     parser.add_argument('-G', '--noautocfg', action='store_true', default=(not cfg.AUTOCFG), help='Do not read config value from params')
     parser.add_argument('-Z', '--pairHarvester', action='store_true', default=cfg.PAIR_HARVESTER, help='Harvester moves in group')
-    parser.add_argument('-R', '--useRatioStrategy', action='store_true', default=cfg.USE_RATIO_STRATEGY, help='Use ratio based calibration')
     parser.add_argument('-E', '--cleanupTurn', type=int, default=cfg.PARAM_CLEANUP_TURN, help='When we should go all out to collect Slimes')
     parser.add_argument('-X', '--capacityMultipliyer', type=float, default=cfg.CAPACITY_MULTIPLIER, help='Capacity multiplier')
+    parser.add_argument('-F', '--noChooseDepotWithFreeSpace', action='store_true', default=(not cfg.CHOOSE_DEPOTS_WITH_FREE_SPACE), help='Do not choose depots with free space')
 
     args = parser.parse_args()
     cfg.OPTIMIZE = args.optimize
     cfg.PAIR_HARVESTER = args.pairHarvester
     cfg.AUTOCFG = (not args.noautocfg)
-    cfg.USE_RATIO_STRATEGY = args.useRatioStrategy
     cfg.PARAM_CLEANUP_TURN = args.cleanupTurn
     cfg.CAPACITY_MULTIPLIER = args.capacityMultipliyer
+    cfg.CHOOSE_DEPOTS_WITH_FREE_SPACE = (not args.noChooseDepotWithFreeSpace)
     if args.tune:
 
         result = [None]*31
@@ -1525,16 +1488,13 @@ if __name__ == "__main__":
 
                     result[N][D][H] = []
 
-                    for ratioBased in range(2):
+                    for capacityMultipliyer in [1,1.2,1.4,1.5,1.6,1.8]:
                         for cleanupTurn in (800,850,900):
                             for harvesterPerDepot in range(4,16):
 
-                                if ratioBased:
-                                    cfg.USE_RATIO_STRATEGY = True
-                                else:
-                                    cfg.USE_RATIO_STRATEGY = False
                                 cfg.MIN_HARVESTOR_PER_DEPOT = harvesterPerDepot
                                 cfg.PARAM_CLEANUP_TURN = cleanupTurn
+                                cfg.CAPACITY_MULTIPLIER = capacityMultipliyer
 
                                 tester = copy.deepcopy(prototester)
 
@@ -1548,7 +1508,7 @@ if __name__ == "__main__":
                                 print('Score',tester.calcScore())
 
 
-                                result[N][D][H].append((tester.calcScore(), (ratioBased, cleanupTurn, harvesterPerDepot)))
+                                result[N][D][H].append((tester.calcScore(), (capacityMultipliyer, cleanupTurn, harvesterPerDepot)))
 
                     result[N][D][H] = max(result[N][D][H])
 
