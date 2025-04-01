@@ -34,6 +34,7 @@ class Config:
         self.DUMP_TO_DEPOT_WHEN_NEAR = False
         self.FW_THRESHOLD = 14
         self.CHOOSE_DEPOTS_WITH_FREE_SPACE = True
+        self.CONCENTRATE_FIRST = False
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -567,8 +568,10 @@ class BioSlime:
                     heappush(grids, (curdist+1,(subgr2,subgc2)) )
         
         if hp:
-            unused,idx = min(hp)
+            sdist,idx = min(hp)
             sr,sc = self.slimes[idx]
+            if sdist > limit:
+                return None
             return self.shortestPathAB(begr,begc,sr,sc,limit,explored,myload)
         return None
 
@@ -689,7 +692,9 @@ class BioSlime:
 
     def collectSlime(self,h,explored,myload,depotbusy):
 
+        limit = self.RN*self.RN
         if self.calStrategy.shouldSlowdown(self.turn, len(self.slimes)) and not self.isSurroundedBySlime(h,explored, myload, depotbusy):
+            limit = 8
             if self.turn&1:
                 return None # do not take action
 
@@ -699,9 +704,9 @@ class BioSlime:
             return None # cannot collect slime
 
         if self.planPath[h] is None:
-            self.planPath[h] = self.shortestPathToSlime(h,self.RN*self.RN,explored,myload)
+            self.planPath[h] = self.shortestPathToSlime(h,limit,explored,myload)
         elif (self.turn%4) == 0: # re-evaluate
-            self.planPath[h] = self.shortestPathToSlime(h,self.RN*self.RN,explored,myload)
+            self.planPath[h] = self.shortestPathToSlime(h,limit,explored,myload)
 
         if self.planPath[h] is None:
             return None
@@ -1018,6 +1023,12 @@ class BioSlime:
 
         totalLoad = sum(self.load)
         if not self.slimes and 0 == totalLoad:
+            self.sendMoves(moveCmds)
+            return
+
+        if self.cfg.CONCENTRATE_FIRST and self.turn < 40:  # Save the depots in early phase
+            for h,(r,c) in enumerate(self.har):
+                moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
             self.sendMoves(moveCmds)
             return
             
