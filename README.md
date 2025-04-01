@@ -41,11 +41,13 @@ What was my approach
     - This is calculated based on equestion `H*C*CAPACITY_MULTIPLIER`,
         - where 'H' = number of harvester
         - where 'C' = Maximum capacity of the harvester
-    - What should be the value of `CAPACITY_MULTIPLIER` ?
+    - What should be the value of `CAPACITY_MULTIPLIER` ? (argument `-X 1`)
         - We need to train the algorithm for different parameters and find the best score.
     - Please refer to `calculateApplicableCapacity` for waiting logic.
         - `applicableCapacity` being the minimum-load of a harvester that will make it return to the depot.
         - During waiting time, the `applicableCapacity` is 0.
+    - At the end around 700 to 900 turn we should harvest all the slimes before exit.
+        - Please refer to argument `-E` to specify `cleanupTurn`.
 
 #### Other tricks
 
@@ -56,6 +58,7 @@ What was my approach
         - It allows more protection to harvester getting surrounded/stuck by slimes.
     - Enhancements
         - While selecting depots we should select a depot with more free-space.
+        - Avoid spreading the harvester to all the depots and use the `MIN_HARVESTOR_PER_DEPOT` (argument `-M 4`).
 
 - Avoid getting surrounded/stuck by slimes
     - When harvestor gets stuck, it cannot collect slimes. Please refer to `isSurroundedBySlime` for the implementation.
