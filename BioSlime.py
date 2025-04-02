@@ -12,10 +12,12 @@ bestParams = [None, None, None, None, None, None, None, None, None, None, [None,
 
 
 debug = False
+debugShortestPathAny=False
 debugStrategy=False
 debugMove = False
 debugCalStrategy=True
 debugGrid = True
+debugAffinity = True
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -33,8 +35,10 @@ class Config:
         self.USE_HIGHER_HARVESTOR_WHILE_CLEANUP = True
         self.DUMP_TO_DEPOT_WHEN_NEAR = False
         self.FW_THRESHOLD = 14
-        self.CHOOSE_DEPOTS_WITH_FREE_SPACE = True
-        self.CONCENTRATE_FIRST = False
+        self.CHOOSE_DEPOTS_WITH_FREE_SPACE = False # We can squeeze some performance here
+        self.CONCENTRATE_FIRST = True
+        self.DEPOT_PERIMETER = 10
+        self.COLLECT_WHEN_DEPOT_PERIMETER_HAS_SLIME = False
 
     def setup(self, N, D, H, C):
         self.N = N
@@ -88,7 +92,7 @@ class CalibrationStrategy:
 
     def setupHarvester(self, harvesterStuck):
         self.harvesterStuck = harvesterStuck
-        self.applcableCapacity = min(2,cfg.C)
+        self.applicableCapacity = min(2,cfg.C)
 
     def calculateScore(self, numSlimes):
         
@@ -112,23 +116,20 @@ class CalibrationStrategy:
         if 0 == turn:
             self.prevScore = self.calculateScore(curNumSlimes)
             self.prevNumSlimes = curNumSlimes
-            #return self.applcableCapacity
+            #return self.applicableCapacity
 
         curScore = self.calculateScore(curNumSlimes)
 
-        numharvesterStuck = 0
-        for x in self.harvesterStuck:
-            if x:
-                numharvesterStuck += 1
+        numharvesterStuck = sum(self.harvesterStuck)
 
         if turn >= self.cfg.PARAM_CLEANUP_TURN: # At the end use highest capacity
-            self.applcableCapacity = self.cfg.C
+            self.applicableCapacity = self.cfg.C
             if debugCalStrategy and (turn % 40) == 0:
-                eprint(turn, 'CLEANUP Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
-            return self.applcableCapacity
+                eprint(turn, 'CLEANUP Applicable capacity', self.applicableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
+            return self.applicableCapacity
 
         if (turn % self.wait) != 0:
-            return self.applcableCapacity
+            return self.applicableCapacity
 
         totalCapacity = self.calcTotalCapacity()
 
@@ -136,14 +137,14 @@ class CalibrationStrategy:
             eprint(turn, 'depot score', self.depotscore, 'total capacity', totalCapacity)
 
         if curNumSlimes < totalCapacity:
-            #self.applcableCapacity = self.applcableCapacity>>1
-            self.applcableCapacity = 0
+            #self.applicableCapacity = self.applicableCapacity>>1
+            self.applicableCapacity = 0
             self.wait = 20
         else:
-            if 0 == self.applcableCapacity:
-                self.applcableCapacity = 1
-            #self.applcableCapacity = min(self.cfg.C,(self.applcableCapacity<<1))
-            self.applcableCapacity = self.cfg.C
+            if 0 == self.applicableCapacity:
+                self.applicableCapacity = 1
+            self.applicableCapacity = min(self.cfg.C,(self.applicableCapacity<<1))
+            #self.applicableCapacity = self.cfg.C
             self.wait = 10
 
 
@@ -151,8 +152,8 @@ class CalibrationStrategy:
         self.prevNumSlimes = curNumSlimes
 
         if debugCalStrategy:
-            eprint(turn, 'Applicable capacity', self.applcableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
-        return self.applcableCapacity
+            eprint(turn, 'Applicable capacity', self.applicableCapacity,'numSlimes',curNumSlimes,'curScore',curScore,'numharvesterStuck',numharvesterStuck)
+        return self.applicableCapacity
  
 
 class BioSlime:
@@ -181,7 +182,7 @@ class BioSlime:
         self.depotAffinity = [None]*self.H
         self.dumpingToDepot = [False]*self.H
         self.calStrategy = CalibrationStrategy(cfg)
-        self.harvesterStuck = [False]*self.H
+        self.harvesterStuck = [0]*self.H
 
     def setup(self):
         # Read the location of each harvester
@@ -310,6 +311,8 @@ class BioSlime:
                     self.depotAffinity[h] = i
                     numHar += 1
         
+        if debugAffinity:
+            eprint('Assigned affinity ', self.depotAffinity)
 
     def assertPath(self,d,nr,nc,r,c):
         nr2 = r + self.dr[d]
@@ -449,22 +452,34 @@ class BioSlime:
                 return None
         return [(depr,depc),prev,'d']
 
-    def shortestPathToDepotAny(self,h,limit,explored,myload):
+    def shortestPathToDepotAny(self,h,limit,explored,myload,depotbusy):
         begr,begc = self.har[h]
+
+
+        for i,(dr,dc) in enumerate(self.depots):
+            if not depotbusy[i]:
+                break
+        else:
+            if debugShortestPathAny:
+                eprint(begr,begc,'shortestPathToDepotAny No depots :( ')
+            return None
+
         hp = [(0,begr,begc)]
         dist = dict()
         source = dict()
         dist[(begr,begc)] = 0
 
-        #if debug:
-        #    eprint(begr,begc,'shortestPathToDepot~~~~ ')
+        if debugShortestPathAny:
+            eprint(begr,begc,'shortestPathToDepotAny~~~~ ')
         while hp:
             curdist, r, c = heappop(hp)
             if curdist > dist[(r,c)]:
                 continue
+            if curdist > limit:
+               return None
             if self.grid[r][c] == 'd' and (begr,begc) != (r,c):
-                #if debug:
-                #    eprint(begr,begc,'shortestPathToDepot found depot', r,c)
+                if debugShortestPathAny:
+                    eprint(begr,begc,'shortestPathToDepot found depot', r,c)
 
                 p = self.buildPathToGoal(begr,begc,r,c,dist,source,explored,'d')
                 if p is not None:
@@ -473,8 +488,6 @@ class BioSlime:
                 #    eprint(begr,begc,'shortestPathToDepot No path to depot', r,c)
                 #eprint(begr,begc,'No steps to take!')
                 #return None,None
-            #if curdist > limit:
-            #   return None
 
             for nr,nc in self.iterMovesFindDepots(r,c,explored,myload):
                 if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
@@ -488,6 +501,9 @@ class BioSlime:
 
     def shortestPathToDepot(self,h,limit,explored,myload,depotbusy):
         begr,begc = self.har[h]
+
+        if self.turn > 900: # At the end break affinity
+            return self.shortestPathToDepotAny(h,limit,explored,myload,depotbusy)
         
         depotidx = self.depotAffinity[h]
         if depotidx is None:
@@ -514,16 +530,22 @@ class BioSlime:
                         break
             '''
             if ret is None:
-                self.harvesterStuck[h] = True
+                self.harvesterStuck[h] = 1
             else:
-                self.harvesterStuck[h] = False
+                self.harvesterStuck[h] = 0
             return ret
         return None
 
 
 
-    def shortestPathToSlime(self,h,limit,explored,myload):
+    def shortestPathToSlimeAB(self,h,limit,explored,myload):
         begr,begc = self.har[h]
+
+
+        if self.turn > 950: # At the ned go all out
+            return self.shortestPathToSlimeAny(h,limit,explored,myload)
+        
+
         # we need to return to depot after grabbing slime
         depotidx = self.depotAffinity[h]
         if depotidx is None:
@@ -540,43 +562,35 @@ class BioSlime:
         
 
         hp = []
-        if not cfg.OPTIMIZE:
-            for i,(sr,sc) in enumerate(self.slimes):
-                hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),i))
+        if cfg.OPTIMIZE:
+            for i in self.easyToReachSlimes:
+                sr,sc = self.slimes[i]
+                heappush(hp,(-self.manhatdist(sr,sc,begr,begc)-self.manhatdist(sr,sc,dr,dc),i))
+                if len(hp) > 4:
+                    heappop(hp)
         else:
-            MAXGRID,unused = self.calcSubGrid(self.N,self.N)[0]
-            grids = [(0,self.calcSubGrid(begr,begc)[0])]
-            exp = set()
-            prevdist = 0
-            while grids:
-                curdist,(subgr,subgc) = heappop(grids)
-                exp.add( (subgr,subgc) )
-                if curdist > prevdist and hp:
-                    break # early exit
-                prevdist = curdist
-                if (subgr,subgc) in self.slimeSubGrids:
-                    for idx in self.slimeSubGrids[(subgr,subgc)]:
-                        sr,sc = self.slimes[idx]
-                        hp.append((self.manhatdist(sr,sc,begr,begc)+self.manhatdist(sr,sc,dr,dc),idx))
-                
-                for subgr2,subgc2 in [(subgr,subgc-1),(subgr-1,subgc-1),(subgr-1,subgc),(subgr-1,subgc+1),(subgr,subgc+1),(subgr+1,subgc+1),(subgr+1,subgc),(subgr+1,subgc-1)]:
-                    if (subgr2,subgc2) in exp:
-                        continue
-                    if subgr2 < 0 or subgc2 < 0 or subgr2 > MAXGRID or subgc2 > MAXGRID:
-                        continue
-                    exp.add( (subgr2,subgc2) )
-                    heappush(grids, (curdist+1,(subgr2,subgc2)) )
+            for i,(sr,sc) in enumerate(self.slimes):
+                heappush(hp,(-self.manhatdist(sr,sc,begr,begc)-self.manhatdist(sr,sc,dr,dc),i))
+                if len(hp) > 4:
+                    heappop(hp)
         
-        if hp:
-            sdist,idx = min(hp)
+        hp.sort()
+        while hp:
+            sdist,idx = hp.pop()
+            sdist = -sdist
             sr,sc = self.slimes[idx]
             if sdist > limit:
                 return None
-            return self.shortestPathAB(begr,begc,sr,sc,limit,explored,myload)
+            ret = self.shortestPathAB(begr,begc,sr,sc,limit,explored,myload)
+            if ret is not None:
+                return ret
         return None
 
-    def shortestPathToSlimeAny(self,h,limit,explored):
-        begr,begh = self.har[h]
+    def shortestPathToSlimeAny(self,h,limit,explored,myload):
+        begr,begc = self.har[h]
+
+        if not self.slimes:
+            return # no slimes
         
         hp = [(0,begr,begc)]
         dist = dict()
@@ -587,17 +601,19 @@ class BioSlime:
             curdist, r, c = heappop(hp)
             if curdist > dist[(r,c)]:
                 continue
+            if curdist > limit:
+               return None
+            assert(len(dist) < self.N*self.N)
             if self.grid[r][c] == 's' and (begr,begc) != (r,c):
 
                 p = self.buildPathToGoal(begr,begc,r,c,dist,source,explored,'s')
                 if p is not None:
+                    if debugShortestPathAny:
+                        eprint(f'{begr},{begc} shortestPathToSlimeAny found at {r},{c} total expanded ', len(dist) )
                     return p
-                #eprint(begr,begc,'No steps to take!')
                 #return None,None
-            if curdist > limit:
-               return None
 
-            for nr,nc in self.iterMoves(r,c):
+            for nr,nc in self.iterMovesGivenExplored(r,c,explored,myload):
                 if (nr,nc) not in dist or dist[(nr,nc)] > (curdist+1):
                     dist[(nr,nc)] = curdist+1
                     source[(nr,nc)] = []
@@ -690,11 +706,14 @@ class BioSlime:
         
         return None
 
+    #shortestPathToSlime = shortestPathToSlimeAny
+    shortestPathToSlime = shortestPathToSlimeAB
+
     def collectSlime(self,h,explored,myload,depotbusy):
 
-        limit = self.RN*self.RN
+        limit = self.N*self.N
         if self.calStrategy.shouldSlowdown(self.turn, len(self.slimes)) and not self.isSurroundedBySlime(h,explored, myload, depotbusy):
-            limit = 8
+            limit = self.cfg.DEPOT_PERIMETER
             if self.turn&1:
                 return None # do not take action
 
@@ -752,8 +771,10 @@ class BioSlime:
 
     def moveToNearestDepot(self,h,explored, myload, depotbusy):
         r,c = self.har[h]
-        if myload == 0:
-            return self.moveAwayFromNearestDepot(h,explored,myload,depotbusy)
+
+        # This breaks the CONCENTRATE_FIRST parameter
+        #if myload == 0:
+        #    return self.moveAwayFromNearestDepot(h,explored,myload,depotbusy)
 
 
         if self.calStrategy.shouldSlowdown(self.turn, len(self.slimes)) and not self.isSurroundedBySlime(h,explored, myload, depotbusy):
@@ -997,24 +1018,46 @@ class BioSlime:
         # find the slimes and nearest harvesters
         self.slimes = []
         self.slimeId = dict()
+        self.easyToReachSlimes = []
         for r in range(self.N):
           for c in range(self.N):
-            if self.grid[r][c] == 's':
+            if self.grid[r][c] == SLIME:
                 self.slimeId[(r,c)] = len(self.slimes)
+                for (nr,nc) in self.iterMoves(r,c): # warning if a slime is next to a depot , it could not be accessed 
+                    if self.grid[nr][nc] != SLIME:
+                        self.easyToReachSlimes.append(len(self.slimes))
+                        break
                 self.slimes.append((r,c))
-                # return to nearest depot ?
-            elif self.grid[r][c] == 'W':# or grid[r][c] == 'd':
+            elif self.grid[r][c] == 'W':
                 explored.add((r,c))
                 
-        self.slimeSubGrids = self.buildSlimeSubGrids(self.slimes)
+        #self.slimeSubGrids = self.buildSlimeSubGrids(self.slimes)
 
-        applcableCapacity = self.calStrategy.calculateApplicableCapacity(turn, len(self.slimes))
+        applicableCapacity = self.calStrategy.calculateApplicableCapacity(turn, len(self.slimes))
         if turn == self.cfg.PARAM_CLEANUP_TURN:
             if self.cfg.USE_HIGHER_HARVESTOR_WHILE_CLEANUP:
                 self.cfg.MIN_HARVESTOR_PER_DEPOT = 10
             self.buildShortestPathFromDepot()
 
         depotbusy = self.depotbad[:]
+
+        depotsNeedAction = [False]*self.D
+        #if self.calStrategy.shouldSlowdown(self.turn, len(self.slimes)):
+        if turn < self.cfg.PARAM_CLEANUP_TURN and self.cfg.COLLECT_WHEN_DEPOT_PERIMETER_HAS_SLIME:
+            #for i in self.easyToReachSlimes:
+            #    sr,sc = self.slimes[i]
+            for i,(sr,sc) in enumerate(self.slimes):
+                for d,(dr,dc) in enumerate(self.depots):
+                    if self.depotbad[d]:
+                        continue
+                    dist = self.shortestPathFromDepot[d][0]
+                    if dist[(sr,sc)] < self.cfg.DEPOT_PERIMETER:
+                        depotsNeedAction[d] = True
+                        break
+        else:
+            depotsNeedAction = [True]*self.D
+
+
 
         for h,(r,c) in enumerate(self.har):
             explored.add((r,c))
@@ -1051,15 +1094,21 @@ class BioSlime:
                 continue
             if self.isNeighborBusy(h, moveCmds):
                 continue
+            if self.depotAffinity[h] is None:
+                continue
+
             if self.planPath[h] is not None:
                 if self.planPath[h][2] == 'd':
                     moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
                     if debugStrategy:
                         eprint('Harvester ',h,r,c, 'moving to nearestet depot', moveCmds[h])
                 elif self.planPath[h][2] == 's':
-                    moveCmds[h] = self.collectSlime(h,explored,self.load[h],depotbusy)
-                    if debugStrategy:
-                        eprint('Harvester ',h,r,c, 'Collecting slime', moveCmds[h])
+                    if self.depotAffinity[h] is not None and depotsNeedAction[self.depotAffinity[h]]:
+                        moveCmds[h] = self.collectSlime(h,explored,self.load[h],depotbusy)
+                        if debugStrategy:
+                            eprint('Harvester ',h,r,c, 'Collecting slime', moveCmds[h])
+                    else:
+                        self.planPath[h] = None
                  
 
         for h,(r,c) in enumerate(self.har):
@@ -1067,12 +1116,13 @@ class BioSlime:
                 continue
             if self.isNeighborBusy(h, moveCmds):
                 continue
-            if self.load[h]>=applcableCapacity and self.load[h]:
+
+            if self.load[h]>=applicableCapacity and self.load[h]:
                 moveCmds[h] = self.moveToNearestDepot(h,explored,self.load[h],depotbusy)
                 if debugStrategy:
                     eprint('Harvester ',h,r,c, 'moving to nearestet depot via new path', moveCmds[h])
 
-            elif self.slimes:
+            elif self.slimes and self.depotAffinity[h] is not None and depotsNeedAction[self.depotAffinity[h]]:
                 moveCmds[h] = self.collectSlime(h,explored,self.load[h],depotbusy)
                 if debugStrategy:
                     eprint('Harvester ',h,r,c, 'Collecting slime in new path', moveCmds[h])
